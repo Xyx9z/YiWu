@@ -231,242 +231,33 @@ struct TranscriptionView: View {
     }
 }
 
-// 主视图
-struct CameraView: View {
+struct ARObjectDetectionContainer: UIViewControllerRepresentable {
     var tabSelected: Bool
-    
-    @StateObject private var camera = CameraModel()
-    @StateObject private var audioRecorder = AudioRecorder()
-    @StateObject private var cardStore = MemoryCardStore()
-    @State private var transcribedText = ""
-    @State private var isTranscribing = false
-    @State private var previousTabState = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    @State private var isRecording = false
-    @State private var currentTranscriptionTask: Task<Void, Never>?
-    @State private var matchingCards: [TextMatchingService.MatchResult] = []
-    @State private var showMatchingCards = false
-    @State private var selectedCard: MemoryCard?
-    @State private var showCardDetail = false
-    
-    private let transcriptionService = TranscriptionService(apiKey: "sk-pnyyswesfdoqkbqmxfpsiykxwglhupcqtpoldurutopocajv")
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                // 相机预览
-                if camera.isReady {
-                    CameraPreview(camera: camera)
-                        .ignoresSafeArea(.all)
-                        .onAppear {
-                            // 确保相机会话启动
-                            camera.startSession()
-                        }
-                } else {
-                    Color.black.ignoresSafeArea(.all)
-                        .overlay(
-                            Text("正在准备相机...")
-                                .foregroundColor(.white)
-                        )
-                }
-                
-                VStack {
-                    // 转录文本显示区域
-                    if !transcribedText.isEmpty || isTranscribing {
-                        TranscriptionView(text: isTranscribing ? "正在识别..." : transcribedText, isTranscribing: isTranscribing) {
-                            withAnimation {
-                                if isTranscribing {
-                                    currentTranscriptionTask?.cancel()
-                                    currentTranscriptionTask = nil
-                                    isTranscribing = false
-                                }
-                                transcribedText = ""
-                                matchingCards = []
-                                showMatchingCards = false
-                            }
-                        }
-                        .padding(.top, 44)
-                    }
-                    
-                    // 显示匹配的卡片
-                    if !matchingCards.isEmpty && showMatchingCards {
-                        ScrollView {
-                            VStack(spacing: 10) {
-                                ForEach(matchingCards, id: \.card.id) { result in
-                                    Button(action: {
-                                        selectedCard = result.card
-                                        showCardDetail = true
-                                    }) {
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text(result.card.title)
-                                                    .font(.headline)
-                                                Text("匹配度: \(Int(result.confidence * 100))%")
-                                                    .font(.caption)
-                                                    .foregroundColor(.gray)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(.gray)
-                                        }
-                                        .padding()
-                                        .background(Color.white.opacity(0.9))
-                                        .cornerRadius(10)
-                                    }
-                                }
-                            }
-                            .padding()
-                        }
-                        .frame(maxHeight: 200)
-                    }
-                    
-                    Spacer()
-                    
-                    // 底部按钮
-                    HStack(spacing: 60) {
-                        // 相机按钮
-                        Button(action: {
-                            camera.takePic()
-                        }) {
-                            Image(systemName: "camera.circle.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 60, height: 60)
-                                .foregroundColor(.white)
-                        }
-                        
-                        // 麦克风按钮
-                        Button(action: {
-                            if isRecording {
-                                stopRecordingAndTranscribe()
-                            } else {
-                                startRecording()
-                            }
-                            isRecording.toggle()
-                        }) {
-                            RecordButton(isRecording: $isRecording, duration: audioRecorder.recordingDuration)
-                        }
-                    }
-                    .padding(.bottom, 30)
-                }
-            }
-            .navigationBarHidden(true)
-        }
-        .sheet(isPresented: $showCardDetail, content: {
-            if let card = selectedCard {
-                NavigationView {
-                    CardDetailView(card: card)
-                }
-            }
-        })
-        .alert("错误", isPresented: $showError) {
-            Button("确定", role: .cancel) { }
-        } message: {
-            Text(errorMessage)
-        }
-        .onChange(of: tabSelected) { newValue in
-            if newValue {
-                // 如果切换到此标签页，确保相机会话启动
-                if camera.isReady {
-                    camera.startSession()
-                } else {
-                    camera.checkPermission()
-                }
-                Task {
-                    do {
-                        try await cardStore.load()
-                    } catch {
-                        showError(message: "加载卡片失败：\(error.localizedDescription)")
-                    }
-                }
-            } else {
-                camera.stopSession()
-            }
-        }
-        .onAppear {
-            // 视图出现时，如果是当前标签页则启动相机
-            if tabSelected {
-                if camera.isReady {
-                    camera.startSession()
-                } else {
-                    camera.checkPermission()
-                }
-            }
-        }
-        .onDisappear {
-            // 视图消失时，如果不是当前标签页则停止相机
-            if !tabSelected {
-                camera.stopSession()
-            }
-        }
+
+    func makeUIViewController(context: Context) -> ARObjectDetectionViewController {
+        let vc = ARObjectDetectionViewController()
+        return vc
     }
-    
-    private func startRecording() {
-        audioRecorder.startRecording()
-    }
-    
-    private func stopRecordingAndTranscribe() {
-        guard let audioFileURL = audioRecorder.stopRecording() else {
-            showError(message: "录音保存失败")
-            return
+
+    func updateUIViewController(_ uiViewController: ARObjectDetectionViewController, context: Context) {
+        // 根据tabSelected控制AR会话的启动和暂停
+        if tabSelected {
+            uiViewController.startARSession()
+        } else {
+            uiViewController.pauseARSession()
         }
-        
-        isTranscribing = true
-        
-        // 创建并存储转写任务
-        currentTranscriptionTask = Task {
-            do {
-                let text = try await transcriptionService.transcribe(audioFileURL: audioFileURL)
-                // 检查任务是否被取消
-                if !Task.isCancelled {
-                    await MainActor.run {
-                        transcribedText = text
-                        isTranscribing = false
-                        
-                        // 执行文本匹配
-                        matchingCards = TextMatchingService.findMatchingCardsWithConfidence(
-                            transcribedText: text,
-                            cards: cardStore.cards
-                        )
-                        
-                        // 如果有匹配结果，显示匹配卡片列表
-                        if !matchingCards.isEmpty {
-                            withAnimation {
-                                showMatchingCards = true
-                            }
-                        }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isTranscribing = false
-                    if !Task.isCancelled {
-                        showError(message: "语音识别失败：\(error.localizedDescription)")
-                    }
-                }
-            }
-            
-            // 删除临时音频文件
-            do {
-                try FileManager.default.removeItem(at: audioFileURL)
-                print("临时音频文件已删除")
-            } catch {
-                print("删除临时音频文件失败：\(error.localizedDescription)")
-            }
-            
-            // 清理任务引用
-            currentTranscriptionTask = nil
-        }
-    }
-    
-    private func showError(message: String) {
-        errorMessage = message
-        showError = true
     }
 }
 
-// SwiftUI 预览
+struct CameraView: View {
+    var tabSelected: Bool
+    
+    var body: some View {
+        ARObjectDetectionContainer(tabSelected: tabSelected)
+            .ignoresSafeArea()
+    }
+}
+
 struct CameraView_Previews: PreviewProvider {
     static var previews: some View {
         CameraView(tabSelected: true)
