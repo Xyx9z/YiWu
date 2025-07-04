@@ -82,7 +82,7 @@ struct MainListView: View {
                         // 物品Tab内容
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 16) {
-                                ForEach(cardStore.cards) { card in
+                                ForEach(cardStore.cards.filter { $0.type == .item }) { card in
                                     NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
                                         CardGridItem(card: card)
                                     }
@@ -96,13 +96,21 @@ struct MainListView: View {
                             .padding(.top, 12)
                         }
                     } else {
-                        // 事件Tab内容（占位）
-                        VStack {
-                            Spacer()
-                            Text("这里是事件Tab内容")
-                                .foregroundColor(.secondary)
-                                .font(.title3)
-                            Spacer()
+                        // 事件Tab内容 - 一行一个的列表布局
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(cardStore.cards.filter { $0.type == .event }) { card in
+                                    NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
+                                        EventCardListItem(card: card)
+                                    }
+                                    .simultaneousGesture(LongPressGesture().onEnded { _ in
+                                        cardToDelete = card
+                                        showingDeleteAlert = true
+                                    })
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
                         }
                     }
                 }
@@ -139,7 +147,7 @@ struct MainListView: View {
                     }
                 }
                 .sheet(isPresented: $showingAddCard) {
-                    CardEditView(cardStore: cardStore)
+                    CardEditView(cardStore: cardStore, initialCardType: selectedTab == 0 ? .item : .event)
                 }
                 .alert("删除卡片", isPresented: $showingDeleteAlert) {
                     Button("取消", role: .cancel) {}
@@ -194,7 +202,7 @@ extension Color {
     }
 }
 
-// 更新卡片样式
+// 更新卡片样式 - 物品卡片（网格样式）
 struct CardGridItem: View {
     let card: MemoryCard
     
@@ -237,6 +245,85 @@ struct CardGridItem: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.15), radius: 5, x: 0, y: 2)
+    }
+}
+
+// 新增：事件卡片（列表样式）
+struct EventCardListItem: View {
+    let card: MemoryCard
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // 左侧图片
+            if !card.images.isEmpty, let uiImage = UIImage(data: card.images[0].imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        Image(systemName: "calendar")
+                            .foregroundColor(.gray)
+                    )
+            }
+            
+            // 右侧内容
+            VStack(alignment: .leading, spacing: 4) {
+                Text(card.title)
+                    .font(.system(size: 18, weight: .medium))
+                    .lineLimit(1)
+                
+                if !card.content.isEmpty {
+                    Text(card.content)
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                
+                // 时间戳 - 加亮显示
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.orange)
+                    
+                    Text(formatDate(card.timestamp))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Color.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.orange.opacity(0.15))
+                        )
+                }
+                .padding(.top, 2)
+            }
+            .padding(.vertical, 8)
+            
+            Spacer()
+            
+            // 右侧箭头
+            Image(systemName: "chevron.right")
+                .foregroundColor(.gray)
+                .padding(.trailing, 8)
+        }
+        .padding(12)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .frame(maxWidth: .infinity)
+    }
+    
+    // 格式化日期为更友好的显示
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
+        return formatter.string(from: date)
     }
 }
 
