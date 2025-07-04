@@ -209,6 +209,100 @@ struct LocationEditView: View {
     }
 }
 
+// 提醒设置组件
+struct ReminderSettingsView: View {
+    @Binding var reminderEnabled: Bool
+    @Binding var reminderTime: Date
+    @Binding var reminderFrequency: ReminderFrequency
+    @Binding var reminderMessage: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("提醒设置")
+                    .font(.title3.bold())
+                    .foregroundColor(.black)
+                
+                Spacer()
+                
+                Toggle("", isOn: $reminderEnabled)
+                    .labelsHidden()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            if reminderEnabled {
+                VStack(spacing: 12) {
+                    // 提醒频率选择
+                    HStack {
+                        Text("频率:")
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .frame(width: 60, alignment: .leading)
+                        
+                        Picker("提醒频率", selection: $reminderFrequency) {
+                            ForEach(ReminderFrequency.allCases, id: \.self) { frequency in
+                                Text(frequency.displayName).tag(frequency)
+                            }
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .padding(.horizontal)
+                    
+                    // 提醒时间选择
+                    HStack {
+                        Text("时间:")
+                            .font(.body)
+                            .foregroundColor(.gray)
+                            .frame(width: 60, alignment: .leading)
+                        
+                        DatePicker("", selection: $reminderTime, displayedComponents: reminderFrequency == .once ? [.date, .hourAndMinute] : [.hourAndMinute])
+                            .labelsHidden()
+                            .datePickerStyle(CompactDatePickerStyle())
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(.horizontal)
+                    
+                    // 提醒内容输入
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("提醒内容:")
+                            .font(.body)
+                            .foregroundColor(.gray)
+                        
+                        TextEditor(text: $reminderMessage)
+                            .frame(height: 80)
+                            .padding(4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                            .overlay(
+                                Group {
+                                    if reminderMessage.isEmpty {
+                                        Text("输入提醒内容，例如\"上好喊妈妈\"")
+                                            .foregroundColor(Color.gray.opacity(0.7))
+                                            .padding(.leading, 8)
+                                            .padding(.top, 8)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                            )
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.bottom, 8)
+                .transition(.opacity)
+                .animation(.easeInOut, value: reminderEnabled)
+            }
+        }
+    }
+}
+
 struct CardEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
@@ -223,9 +317,23 @@ struct CardEditView: View {
     @State private var longitude: String = ""
     @State private var locationNotes: String = ""
     
-    init(cardStore: MemoryCardStore, card: MemoryCard? = nil) {
+    // 提醒相关状态
+    @State private var reminderEnabled: Bool = false
+    @State private var reminderTime: Date = Date()
+    @State private var reminderFrequency: ReminderFrequency = .none
+    @State private var reminderMessage: String = ""
+    
+    init(cardStore: MemoryCardStore, card: MemoryCard? = nil, initialCardType: CardType = .item) {
         self.cardStore = cardStore
-        _card = State(initialValue: card ?? MemoryCard())
+        if let existingCard = card {
+            _card = State(initialValue: existingCard)
+            _reminderEnabled = State(initialValue: existingCard.reminderEnabled)
+            _reminderTime = State(initialValue: existingCard.reminderTime ?? Date())
+            _reminderFrequency = State(initialValue: existingCard.reminderFrequency)
+            _reminderMessage = State(initialValue: existingCard.reminderMessage)
+        } else {
+            _card = State(initialValue: MemoryCard(type: initialCardType))
+        }
     }
     
     var body: some View {
@@ -240,6 +348,20 @@ struct CardEditView: View {
                     )
                     
                     VStack(spacing: 16) {
+                        // 卡片类型选择器
+                        Picker("卡片类型", selection: $card.type) {
+                            Text("物品").tag(CardType.item)
+                            Text("事件").tag(CardType.event)
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .padding(.horizontal)
+                        .onChange(of: card.type) { newType in
+                            // 如果切换到物品类型，禁用提醒
+                            if newType == .item {
+                                reminderEnabled = false
+                            }
+                        }
+                        
                         // 标题输入框
                         TextField("输入卡片标题", text: $card.title)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -272,6 +394,16 @@ struct CardEditView: View {
                             notes: $locationNotes,
                             cardTitle: card.title
                         )
+                        
+                        // 事件类型才显示提醒设置
+                        if card.type == .event {
+                            ReminderSettingsView(
+                                reminderEnabled: $reminderEnabled,
+                                reminderTime: $reminderTime,
+                                reminderFrequency: $reminderFrequency,
+                                reminderMessage: $reminderMessage
+                            )
+                        }
                     }
                     .padding(.top, 8)
                 }
@@ -403,7 +535,27 @@ struct CardEditView: View {
     }
     
     private func saveCard() {
-        card.timestamp = Date()
+        // 检查是否是编辑现有卡片
+        let isExistingCard = cardStore.cards.contains(where: { $0.id == card.id })
+        
+        // 只在创建新卡片时设置时间戳，编辑现有卡片时保留原时间戳
+        if !isExistingCard {
+            card.timestamp = Date()
+        }
+        
+        // 保存提醒设置
+        if card.type == .event {
+            card.reminderEnabled = reminderEnabled
+            card.reminderTime = reminderEnabled ? reminderTime : nil
+            card.reminderFrequency = reminderEnabled ? reminderFrequency : .none
+            card.reminderMessage = reminderEnabled ? reminderMessage : ""
+        } else {
+            card.reminderEnabled = false
+            card.reminderTime = nil
+            card.reminderFrequency = .none
+            card.reminderMessage = ""
+        }
+        
         if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
             cardStore.cards[index] = card
         } else {
@@ -416,6 +568,11 @@ struct CardEditView: View {
         Task {
             do {
                 try await cardStore.save()
+                
+                // 如果启用了提醒，设置本地通知
+                if card.type == .event && card.reminderEnabled {
+                    ReminderManager.shared.scheduleReminder(for: card)
+                }
             } catch {
                 print("保存卡片失败: \(error.localizedDescription)")
             }
