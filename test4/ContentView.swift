@@ -23,6 +23,7 @@ struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedTab = 0
     @State private var showOnboarding = true  // 添加状态变量控制启动页显示
+    @EnvironmentObject private var reminderManager: ReminderManager
 
     // 添加初始化方法，设置全局TabBar外观
     init() {
@@ -39,6 +40,17 @@ struct ContentView: View {
         // 确保图标始终不透明
         UITabBar.appearance().unselectedItemTintColor = UIColor.gray
         UITabBar.appearance().tintColor = UIColor.blue
+        
+        // 设置通知监听器，用于从其他视图切换标签
+        setupNotificationObservers()
+    }
+    
+    // 设置通知监听器
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("SwitchToNavigationTab"), object: nil, queue: .main) { _ in
+            // 切换到导航标签页
+            selectedTab = 1
+        }
     }
 
     var body: some View {
@@ -69,7 +81,53 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
         }
+        .alert(item: reminderAlertItem) { alertItem in
+            Alert(
+                title: Text(alertItem.title),
+                message: Text(alertItem.message),
+                primaryButton: .default(Text("确认")) {
+                    if let cardID = alertItem.cardID {
+                        reminderManager.confirmReminder(cardID: cardID)
+                    }
+                },
+                secondaryButton: .cancel(Text("稍后提醒")) {
+                    if let cardID = alertItem.cardID {
+                        reminderManager.remindLater(cardID: cardID)
+                    }
+                }
+            )
+        }
+        .onAppear {
+            // 应用启动时检查提醒
+            reminderManager.checkReminders()
+        }
     }
+    
+    // 创建提醒对话框的绑定
+    private var reminderAlertItem: Binding<ReminderAlertItem?> {
+        Binding<ReminderAlertItem?>(
+            get: {
+                if reminderManager.showingReminderAlert, let card = reminderManager.currentReminderCard {
+                    return ReminderAlertItem(
+                        id: card.id.uuidString,
+                        cardID: card.id,
+                        title: card.title,
+                        message: card.reminderMessage.isEmpty ? "您有一个事件需要处理" : card.reminderMessage
+                    )
+                }
+                return nil
+            },
+            set: { _ in }
+        )
+    }
+}
+
+// 用于提醒对话框的可识别项
+struct ReminderAlertItem: Identifiable {
+    let id: String
+    let cardID: UUID?
+    let title: String
+    let message: String
 }
 
 private let itemFormatter: DateFormatter = {
