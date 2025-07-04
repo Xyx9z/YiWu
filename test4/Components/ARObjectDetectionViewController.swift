@@ -26,7 +26,6 @@ class ARObjectDetectionViewController: UIViewController {
         super.viewDidLoad()
         setupAR()
         setupManagers()
-        setupUI()
     }
     
     private func setupAR() {
@@ -65,25 +64,6 @@ class ARObjectDetectionViewController: UIViewController {
         tapGesture.cancelsTouchesInView = false
     }
     
-    private func setupUI() {
-        let closeButton = UIButton(type: .system)
-        closeButton.setTitle("关闭", for: .normal)
-        closeButton.setTitleColor(.white, for: .normal)
-        closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        closeButton.layer.cornerRadius = 8
-        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        
-        view.addSubview(closeButton)
-        
-        NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
-            closeButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            closeButton.widthAnchor.constraint(equalToConstant: 60),
-            closeButton.heightAnchor.constraint(equalToConstant: 36)
-        ])
-    }
-    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         sessionManager.resetTracking()
@@ -92,10 +72,6 @@ class ARObjectDetectionViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         sessionManager.pauseSession()
-    }
-    
-    @objc private func closeTapped() {
-        dismiss(animated: true)
     }
     
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
