@@ -86,6 +86,23 @@ struct CardDetailView: View {
                     .foregroundColor(.primary)
                     .padding(.top, 0)
                     .padding(.horizontal, 18)
+                
+                // 类型标签
+                HStack {
+                    Text(updatedCard.type == .item ? "物品" : "事件")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(updatedCard.type == .item ? Color.blue : Color.orange)
+                        )
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
+                
                 // 详细内容
                 if !updatedCard.content.isEmpty {
                     Text(updatedCard.content)
@@ -137,47 +154,50 @@ struct CardDetailView: View {
                     .padding(.bottom, 12)
                 }
                 
-                // 时间戳上方增加导航按钮
-                Button(action: {
-                    if let dest = destination, dest.latitude != 0 && dest.longitude != 0 {
-                        alertMessage = "正在导航到：\(updatedCard.title)"
-                        
-                        // 设置目的地并跳转到IndoorNavigationView
-                        let locationData = LocationData(
-                            coordinate: CLLocationCoordinate2D(
-                                latitude: dest.latitude,
-                                longitude: dest.longitude
-                            ),
-                            name: dest.name ?? updatedCard.title,
-                            description: dest.notes
-                        )
-                        
-                        // 确保设置目的地
-                        NavigationService.shared.setDestination(locationData)
-                        print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
-                        
-                        // 直接切换到IndoorNavigation标签页
-                        tabSelection = 1
-                    } else {
-                        alertMessage = "该物品没有有效的位置信息"
-                        showAlert = true
+                // 只有在物品类型时才显示导航按钮
+                if updatedCard.type == .item {
+                    Button(action: {
+                        if let dest = destination, dest.latitude != 0 && dest.longitude != 0 {
+                            alertMessage = "正在导航到：\(updatedCard.title)"
+                            
+                            // 设置目的地并跳转到IndoorNavigationView
+                            let locationData = LocationData(
+                                coordinate: CLLocationCoordinate2D(
+                                    latitude: dest.latitude,
+                                    longitude: dest.longitude
+                                ),
+                                name: dest.name ?? updatedCard.title,
+                                description: dest.notes
+                            )
+                            
+                            // 确保设置目的地
+                            NavigationService.shared.setDestination(locationData)
+                            print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
+                            
+                            // 直接切换到IndoorNavigation标签页
+                            tabSelection = 1
+                        } else {
+                            alertMessage = "该物品没有有效的位置信息"
+                            showAlert = true
+                        }
+                    }) {
+                        Text("导航到该物品")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.green)
+                            )
                     }
-                }) {
-                    Text("导航到该物品")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.green)
-                        )
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 8)
+                    .alert(alertMessage, isPresented: $showAlert) {
+                        Button("确定", role: .cancel) {}
+                    }
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 8)
-                .alert(alertMessage, isPresented: $showAlert) {
-                    Button("确定", role: .cancel) {}
-                }
+                
                 // 时间戳
                 Text("创建时间：\(updatedCard.timestamp, formatter: itemFormatter)")
                     .font(.caption)
