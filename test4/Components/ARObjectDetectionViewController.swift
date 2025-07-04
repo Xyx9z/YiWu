@@ -1,6 +1,8 @@
 import UIKit
 import ARKit
 import SceneKit
+import SwiftUI
+import CoreData
 
 // 新增：检测器类型枚举
 enum DetectorType {
@@ -13,6 +15,7 @@ class ARObjectDetectionViewController: UIViewController {
     private var sessionManager: ARSessionManager!
     private var yoloDetector: YOLOObjectDetector!
     private var labelManager: ARLabelManager!
+    private var cardStore = MemoryCardStore()
     
     // 新增：公开方法用于外部控制AR会话
     @objc func startARSession() {
@@ -62,6 +65,15 @@ class ARObjectDetectionViewController: UIViewController {
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         sceneView.addGestureRecognizer(tapGesture)
         tapGesture.cancelsTouchesInView = false
+        
+        // 加载记忆卡片
+        Task {
+            do {
+                try await cardStore.load()
+            } catch {
+                print("加载卡片失败：\(error)")
+            }
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -102,6 +114,11 @@ class ARObjectDetectionViewController: UIViewController {
             textField.text = self?.labelManager.getCustomName(for: objectID)
         }
         
+        // 添加查询按钮，使用蓝色风格使其更为突出
+        alert.addAction(UIAlertAction(title: "查询水杯", style: .default) { [weak self] _ in
+            self?.openWaterBottleCard()
+        })
+        
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
             if let name = alert.textFields?.first?.text {
                 self?.labelManager.saveCustomName(name, for: objectID)
@@ -111,6 +128,42 @@ class ARObjectDetectionViewController: UIViewController {
         
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         present(alert, animated: true)
+    }
+    
+    // 添加打开水杯卡片的方法
+    private func openWaterBottleCard() {
+        // 显示加载指示器
+        let loadingAlert = UIAlertController(title: nil, message: "正在查找记忆卡片...", preferredStyle: .alert)
+        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.style = .medium
+        loadingIndicator.startAnimating()
+        
+        loadingAlert.view.addSubview(loadingIndicator)
+        present(loadingAlert, animated: true)
+        
+        // 查找标题为"我的水杯"的卡片
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            
+            // 关闭加载指示器
+            self.dismiss(animated: true) {
+                if let waterBottleCard = self.cardStore.cards.first(where: { $0.title == "我的水杯" }) {
+                    // 创建并展示CardEditView，并提供CoreData上下文
+                    let context = PersistenceController.shared.container.viewContext
+                    let cardEditView = UIHostingController(
+                        rootView: CardEditView(cardStore: self.cardStore, card: waterBottleCard)
+                            .environment(\.managedObjectContext, context)
+                    )
+                    self.present(cardEditView, animated: true)
+                } else {
+                    // 未找到对应卡片，显示提示
+                    let alert = UIAlertController(title: "未找到", message: "未找到'我的水杯'的记忆卡片", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "确定", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
     }
 }
 
