@@ -2,25 +2,45 @@ import SwiftUI
 import CoreData
 import CoreLocation
 
+// 包装器组件，用于从环境获取tabSelection
+struct CardDetailViewContainer: View {
+    let card: MemoryCard
+    let cardStore: MemoryCardStore
+    @Environment(\.tabSelection) private var tabSelection
+    
+    var body: some View {
+        CardDetailView(card: card, cardStore: cardStore, tabSelection: tabSelection)
+    }
+}
+
 struct CardDetailView: View {
     let card: MemoryCard
+    @ObservedObject var cardStore: MemoryCardStore
     @Environment(\.dismiss) private var dismiss
     @State private var selectedImageIndex: Int = 0
     @Environment(\.managedObjectContext) private var viewContext
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var showingEditSheet = false
-    @StateObject private var cardStore = MemoryCardStore()
+    @State private var updatedCard: MemoryCard
+    @Binding var tabSelection: Int
+    
+    init(card: MemoryCard, cardStore: MemoryCardStore, tabSelection: Binding<Int>) {
+        self.card = card
+        self.cardStore = cardStore
+        self._updatedCard = State(initialValue: card)
+        self._tabSelection = tabSelection
+    }
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 // 顶部图片轮播
-                if !card.images.isEmpty {
+                if !updatedCard.images.isEmpty {
                     ZStack(alignment: .topTrailing) {
                         TabView(selection: $selectedImageIndex) {
-                            ForEach(card.images.indices, id: \.self) { idx in
-                                if let uiImage = UIImage(data: card.images[idx].imageData) {
+                            ForEach(updatedCard.images.indices, id: \.self) { idx in
+                                if let uiImage = UIImage(data: updatedCard.images[idx].imageData) {
                                     Image(uiImage: uiImage)
                                         .resizable()
                                         .scaledToFill()
@@ -33,8 +53,8 @@ struct CardDetailView: View {
                         .frame(height: 260)
                         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                         // 页码指示器
-                        if card.images.count > 1 {
-                            Text("\(selectedImageIndex+1)/\(card.images.count)")
+                        if updatedCard.images.count > 1 {
+                            Text("\(selectedImageIndex+1)/\(updatedCard.images.count)")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 8)
@@ -46,9 +66,9 @@ struct CardDetailView: View {
                         }
                     }
 //                    小圆点指示器
-                    if card.images.count > 1 {
+                    if updatedCard.images.count > 1 {
                         HStack(spacing: 7) {
-                            ForEach(card.images.indices, id: \.self) { idx in
+                            ForEach(updatedCard.images.indices, id: \.self) { idx in
                                 Circle()
                                     .fill(idx == selectedImageIndex ? Color.gray.opacity(0.85) : Color.gray.opacity(0.3))
                                     .frame(width: 8, height: 8)
@@ -60,14 +80,14 @@ struct CardDetailView: View {
                     }
                 }
                 // 标题
-                Text(card.title)
+                Text(updatedCard.title)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.primary)
                     .padding(.top, 0)
                     .padding(.horizontal, 18)
                 // 详细内容
-                if !card.content.isEmpty {
-                    Text(card.content)
+                if !updatedCard.content.isEmpty {
+                    Text(updatedCard.content)
                         .font(.system(size: 17))
                         .foregroundColor(Color(.label))
                         .lineSpacing(7)
@@ -82,14 +102,37 @@ struct CardDetailView: View {
                     do {
                         let destinations = try viewContext.fetch(fetchRequest)
                         let matchingDestination = destinations.first { destination in
-                            return destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) == card.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                            return destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) == updatedCard.title.trimmingCharacters(in: .whitespacesAndNewlines)
                         }
                         if let destination = matchingDestination {
-                            alertMessage = "正在导航到：\(card.title)"
+                            // 检查坐标是否有效
+                            if destination.latitude != 0 && destination.longitude != 0 {
+                                alertMessage = "正在导航到：\(updatedCard.title)"
+                                
+                                // 设置目的地并跳转到IndoorNavigationView
+                                let locationData = LocationData(
+                                    coordinate: CLLocationCoordinate2D(
+                                        latitude: destination.latitude,
+                                        longitude: destination.longitude
+                                    ),
+                                    name: destination.name ?? updatedCard.title,
+                                    description: destination.notes
+                                )
+                                
+                                // 确保设置目的地
+                                NavigationService.shared.setDestination(locationData)
+                                print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
+                                
+                                // 直接切换到IndoorNavigation标签页
+                                tabSelection = 1
+                            } else {
+                                alertMessage = "该物品没有有效的位置信息"
+                                showAlert = true
+                            }
                         } else {
                             alertMessage = "未检索到物品"
+                            showAlert = true
                         }
-                        showAlert = true
                     } catch {
                         alertMessage = "检索目的地时出错"
                         showAlert = true
@@ -111,7 +154,7 @@ struct CardDetailView: View {
                     Button("确定", role: .cancel) {}
                 }
                 // 时间戳
-                Text("创建时间：\(card.timestamp, formatter: itemFormatter)")
+                Text("创建时间：\(updatedCard.timestamp, formatter: itemFormatter)")
                     .font(.caption)
                     .foregroundColor(.gray)
                     .padding(.horizontal, 18)
@@ -129,8 +172,19 @@ struct CardDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingEditSheet) {
-            CardEditView(cardStore: cardStore, card: card)
+        .sheet(isPresented: $showingEditSheet, onDismiss: {
+            // 当编辑视图关闭时，更新当前卡片
+            if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
+                updatedCard = cardStore.cards[index]
+            }
+        }) {
+            CardEditView(cardStore: cardStore, card: updatedCard)
+        }
+        .onAppear {
+            // 确保显示的是最新数据
+            if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
+                updatedCard = cardStore.cards[index]
+            }
         }
     }
 }
