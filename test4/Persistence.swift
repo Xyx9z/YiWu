@@ -14,10 +14,16 @@ struct PersistenceController {
     static let preview: PersistenceController = {
         let result = PersistenceController(inMemory: true)
         let viewContext = result.container.viewContext
-        for _ in 0..<10 {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-        }
+        
+        // 添加示例目的地
+        let destination = Destination(context: viewContext)
+        destination.id = UUID()
+        destination.name = "示例位置"
+        destination.latitude = 31.2304
+        destination.longitude = 121.4737
+        destination.notes = "这是一个示例目的地"
+        destination.timestamp = Date()
+        
         do {
             try viewContext.save()
         } catch {
