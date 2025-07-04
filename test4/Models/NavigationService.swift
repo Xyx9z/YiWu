@@ -27,7 +27,7 @@ class NavigationService {
     
     func getNavigationInstructions() -> String {
         guard let dest = destination else {
-            return "请选择目的地"
+            return "请选择所寻物品"
         }
         
         return "正在前往\(dest.name)"
