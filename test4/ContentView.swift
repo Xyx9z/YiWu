@@ -40,17 +40,6 @@ struct ContentView: View {
         // 确保图标始终不透明
         UITabBar.appearance().unselectedItemTintColor = UIColor.gray
         UITabBar.appearance().tintColor = UIColor.blue
-        
-        // 设置通知监听器，用于从其他视图切换标签
-        setupNotificationObservers()
-    }
-    
-    // 设置通知监听器
-    private func setupNotificationObservers() {
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("SwitchToNavigationTab"), object: nil, queue: .main) { _ in
-            // 切换到导航标签页
-            selectedTab = 1
-        }
     }
 
     var body: some View {
@@ -100,6 +89,25 @@ struct ContentView: View {
         .onAppear {
             // 应用启动时检查提醒
             reminderManager.checkReminders()
+            
+            // 设置通知监听器，用于从其他视图切换标签
+            setupNotificationObservers()
+        }
+        .onDisappear {
+            // 移除观察者
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+    
+    // 设置通知监听器
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SwitchToNavigationTab"), 
+            object: nil, 
+            queue: .main
+        ) { _ in
+            // 切换到寻物助手标签页
+            selectedTab = 1
         }
     }
     
