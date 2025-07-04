@@ -2,31 +2,6 @@ import SwiftUI
 import AVFoundation
 import Speech
 
-// 简化的语音识别器 - 避免所有复杂操作
-class SimpleSpeechRecognizer: ObservableObject {
-    @Published var text = ""
-    @Published var isRecording = false
-    
-    // 获取用户输入的简化模拟实现
-    func startRecording() {
-        DispatchQueue.main.async {
-            self.isRecording = true
-            self.text = ""
-            
-            // 模拟识别过程
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.text = "正在识别中..."
-            }
-        }
-    }
-    
-    func stopRecording() {
-        DispatchQueue.main.async {
-            self.isRecording = false
-            self.text = "模拟的语音识别结果"
-        }
-    }
-}
 
 // 实际相机模型
 class CameraModel: ObservableObject {
