@@ -11,27 +11,10 @@ import CoreData
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedTab = 0
-    @State private var showOnboarding = true  // 添加状态变量控制启动页显示
-    
-    // 添加初始化方法，设置全局TabBar外观
-    init() {
-        // 使用UIKit的方式设置全局TabBar外观
-        let appearance = UITabBarAppearance()
-        // 设置未选中图标颜色为不透明的灰色
-        appearance.stackedLayoutAppearance.normal.iconColor = UIColor.gray.withAlphaComponent(1.0)
-        // 设置选中图标颜色
-        appearance.stackedLayoutAppearance.selected.iconColor = UIColor.blue
-        
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-        
-        // 确保图标始终不透明
-        UITabBar.appearance().unselectedItemTintColor = UIColor.gray
-        UITabBar.appearance().tintColor = UIColor.blue
-    }
     
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
+            Color.white.ignoresSafeArea()
             TabView(selection: $selectedTab) {
                 MainListView()
                     .tabItem {
@@ -41,28 +24,16 @@ struct ContentView: View {
                 
                 IndoorNavigationView()
                     .tabItem {
-                        Label("室内导航", systemImage: "map")
+                        Label("寻物助手", systemImage: "map")
                     }
                     .tag(1)
                 
                 CameraView(tabSelected: selectedTab == 2)
                     .tabItem {
-                        Label("摄像头", systemImage: "camera")
+                        Label("物品识别", systemImage: "camera")
                     }
                     .tag(2)
             }
-            
-            // 添加分隔线
-            VStack {
-                Divider()
-                    .background(Color.gray)
-                    .frame(height: 0.5) // 非常细的线
-                Spacer().frame(height: 49) // TabBar的高度
-            }
-            .edgesIgnoringSafeArea(.bottom)
-        }
-        .fullScreenCover(isPresented: $showOnboarding) {
-            OnboardingView()
         }
     }
 }
