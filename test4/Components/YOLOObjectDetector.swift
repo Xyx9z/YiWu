@@ -109,8 +109,35 @@ class YOLOObjectDetector {
         print("YOLO 检测到物体数量: \(results.count)")
         let detectedObjects: [DetectedObject] = results.compactMap { obs in
             guard let topLabel = obs.labels.first else { return nil }
-            print("物体: \(topLabel.identifier), 置信度: \(topLabel.confidence), boundingBox: \(obs.boundingBox)")
-            return DetectedObject(identifier: topLabel.identifier, confidence: topLabel.confidence, boundingBox: obs.boundingBox)
+            
+            // 处理标识符，确保正确显示中文名称
+            var identifier = topLabel.identifier
+            
+            // 对特定的英文标识符进行中文映射
+            let englishToChinese: [String: String] = [
+                "cup": "水杯",
+                "bottle": "水瓶",
+                "book": "书本",
+                "laptop": "笔记本电脑",
+                "cell phone": "手机",
+                "keyboard": "键盘",
+                "mouse": "鼠标",
+                "remote": "遥控器",
+                "glasses": "眼镜",
+                "clock": "时钟",
+                "vase": "花瓶",
+                "scissors": "剪刀",
+                "teddy bear": "泰迪熊",
+                "toothbrush": "牙刷",
+                "hair drier": "吹风机"
+            ]
+            
+            if let chineseName = englishToChinese[identifier.lowercased()] {
+                identifier = chineseName
+            }
+            
+            print("物体: \(identifier), 置信度: \(topLabel.confidence), boundingBox: \(obs.boundingBox)")
+            return DetectedObject(identifier: identifier, confidence: topLabel.confidence, boundingBox: obs.boundingBox)
         }
         DispatchQueue.main.async {
             self.delegate?.objectDetector(self as Any, didDetectObjects: detectedObjects)
