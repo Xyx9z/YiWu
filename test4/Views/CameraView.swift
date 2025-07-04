@@ -182,6 +182,10 @@ struct TranscriptionView: View {
     let isTranscribing: Bool
     var onClear: () -> Void
     
+    // 添加计时器相关状态
+    @State private var autoCloseTimer: Timer? = nil
+    @State private var remainingTime: Int = 1
+    
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // 文字内容
@@ -203,6 +207,64 @@ struct TranscriptionView: View {
         }
         .background(Color.white.opacity(0.8))
         .animation(.easeInOut, value: !text.isEmpty)
+        .onAppear {
+            startAutoCloseTimer()
+        }
+        .onDisappear {
+            stopAutoCloseTimer()
+        }
+        .onChange(of: text) { _ in
+            // 当文本变化时重新启动定时器
+            restartAutoCloseTimer()
+        }
+        .onChange(of: isTranscribing) { newValue in
+            // 当正在转写时，不启动自动关闭
+            if newValue {
+                stopAutoCloseTimer()
+            } else {
+                // 转写完成后启动自动关闭
+                startAutoCloseTimer()
+            }
+        }
+    }
+    
+    // 启动自动关闭计时器
+    private func startAutoCloseTimer() {
+        // 如果正在转写，不启动定时器
+        if isTranscribing {
+            return
+        }
+        
+        // 停止现有计时器
+        stopAutoCloseTimer()
+        
+        // 重置剩余时间
+        remainingTime = 1
+        
+        // 创建新计时器
+        autoCloseTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if remainingTime > 0 {
+                remainingTime -= 1
+            } else {
+                // 时间到，执行关闭操作
+                onClear()
+                stopAutoCloseTimer()
+            }
+        }
+    }
+    
+    // 停止自动关闭计时器
+    private func stopAutoCloseTimer() {
+        autoCloseTimer?.invalidate()
+        autoCloseTimer = nil
+    }
+    
+    // 重新启动计时器
+    private func restartAutoCloseTimer() {
+        if !isTranscribing {
+            stopAutoCloseTimer()
+            startAutoCloseTimer()
+        }
     }
 }
 
