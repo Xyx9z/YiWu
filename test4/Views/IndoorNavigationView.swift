@@ -119,6 +119,15 @@ struct IndoorNavigationView: View {
         }
         .onAppear {
             locationService.requestLocationPermission()
+            
+            // 从NavigationService获取已设置的目的地
+            if let destination = navigationService.getDestination() {
+                self.selectedDestination = destination
+                print("已获取到设置的目的地: \(destination.name), 坐标: \(destination.coordinate.latitude), \(destination.coordinate.longitude)")
+                // 只设置目的地，不自动开始导航
+            } else {
+                print("未获取到目的地，等待用户选择")
+            }
         }
     }
     
@@ -331,6 +340,7 @@ class ARNavigationViewController: UIViewController {
     init(destination: LocationData) {
         self.destination = destination
         super.init(nibName: nil, bundle: nil)
+        print("ARNavigationViewController初始化: 目的地=\(destination.name), 坐标=\(destination.coordinate.latitude), \(destination.coordinate.longitude)")
     }
     
     required init?(coder: NSCoder) {
@@ -341,6 +351,7 @@ class ARNavigationViewController: UIViewController {
         super.viewDidLoad()
         setupARView()
         setupNavigation()
+        print("ARNavigationViewController.viewDidLoad: 目的地=\(destination.name)")
     }
     
     override func viewWillAppear(_ animated: Bool) {
