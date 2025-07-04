@@ -11,6 +11,7 @@ import CoreData
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedTab = 0
+    @State private var showOnboarding = true  // 添加状态变量控制启动页显示
     
     // 添加初始化方法，设置全局TabBar外观
     init() {
@@ -59,6 +60,9 @@ struct ContentView: View {
                 Spacer().frame(height: 49) // TabBar的高度
             }
             .edgesIgnoringSafeArea(.bottom)
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView()
         }
     }
 }
