@@ -43,9 +43,16 @@ class MemoryCardStore: ObservableObject {
             guard let data = try? Data(contentsOf: fileURL) else {
                 return []
             }
-            let cards = try JSONDecoder().decode([MemoryCard].self, from: data)
-            return cards
+            
+            do {
+                let cards = try JSONDecoder().decode([MemoryCard].self, from: data)
+                return cards
+            } catch {
+                print("解码卡片数据时出错: \(error.localizedDescription)")
+                return []
+            }
         }
+        
         let cards = try await task.value
         DispatchQueue.main.async {
             self.cards = cards
@@ -54,9 +61,14 @@ class MemoryCardStore: ObservableObject {
     
     func save() async throws {
         let task = Task {
-            let data = try JSONEncoder().encode(cards)
-            let outfile = try Self.fileURL()
-            try data.write(to: outfile)
+            do {
+                let data = try JSONEncoder().encode(cards)
+                let outfile = try Self.fileURL()
+                try data.write(to: outfile)
+            } catch {
+                print("保存卡片数据时出错: \(error.localizedDescription)")
+                throw error
+            }
         }
         _ = try await task.value
     }
