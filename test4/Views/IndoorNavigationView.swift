@@ -36,9 +36,9 @@ struct IndoorNavigationView: View {
                             Button(action: {
                                 showingFullMap = true
                             }) {
-                                Image("室内地图") // 确保在Assets中添加了"室内地图"图片
+                                Image("室内地图")
                                     .resizable()
-                                    .scaledToFit()
+                                    .scaledToFill()
                                     .frame(width: 120, height: 120)
                                     .cornerRadius(10)
                                     .overlay(
@@ -138,6 +138,8 @@ struct FullMapView: View {
                 Image("室内地图")
                     .resizable()
                     .scaledToFit()
+                    .cornerRadius(20)
+                    .padding()
             }
             .navigationTitle("室内地图")
             .navigationBarItems(
