@@ -83,7 +83,7 @@ struct MainListView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(cardStore.cards) { card in
-                                    NavigationLink(destination: CardDetailView(card: card)) {
+                                    NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
                                         CardGridItem(card: card)
                                     }
                                     .simultaneousGesture(LongPressGesture().onEnded { _ in
