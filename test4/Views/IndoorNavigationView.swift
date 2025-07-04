@@ -82,7 +82,7 @@ struct IndoorNavigationView: View {
                                 showingDestinationPicker = true
                             }
                         }) {
-                            Text(selectedDestination == nil ? "选择目的地" : "开始导航")
+                            Text(selectedDestination == nil ? "选择所寻物品" : "开始导航")
                                 .font(.headline)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -217,6 +217,8 @@ struct DestinationPickerView: View {
     @State private var newDestinationLatitude = ""
     @State private var newDestinationLongitude = ""
     @State private var newDestinationNotes = ""
+    @State private var showingDeleteAlert = false
+    @State private var destinationToDelete: Destination?
     
     // 定义网格布局
     private let columns = [
@@ -276,6 +278,14 @@ struct DestinationPickerView: View {
                                     )
                                     presentationMode.wrappedValue.dismiss()
                                 }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        destinationToDelete = destination
+                                        showingDeleteAlert = true
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 32)
@@ -288,7 +298,7 @@ struct DestinationPickerView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
-                        Text("选择目的地")
+                        Text("选择所寻物品")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(
                                 LinearGradient(
@@ -339,6 +349,16 @@ struct DestinationPickerView: View {
                         }
                     )
                 }
+            }
+            .alert("删除目的地", isPresented: $showingDeleteAlert) {
+                Button("取消", role: .cancel) {}
+                Button("删除", role: .destructive) {
+                    if let destination = destinationToDelete {
+                        destinationStore.deleteDestination(destination)
+                    }
+                }
+            } message: {
+                Text("确定要删除这个目的地吗？此操作无法撤销。")
             }
         }
     }
