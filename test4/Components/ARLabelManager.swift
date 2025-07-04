@@ -5,6 +5,7 @@ class BoundingBoxView: UIView {
     let titleLabel = UILabel()
     var objectID: String = ""
     var onLabelTapped: ((String) -> Void)?
+    var onLabelLongPressed: ((String) -> Void)?
     
     init(frame: CGRect, label: String, confidence: Float) {
         super.init(frame: frame)
@@ -47,19 +48,47 @@ class BoundingBoxView: UIView {
         let tap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
         titleLabel.addGestureRecognizer(tap)
         self.addSubview(titleLabel)
+        
+        // 增加整个边框的点击手势
+        let boxTap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
+        self.addGestureRecognizer(boxTap)
+        
+        // 添加长按手势
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(labelLongPressed))
+        longPress.minimumPressDuration = 0.8 // 设置长按时间为0.8秒
+        self.addGestureRecognizer(longPress)
+        
+        // 为标签也添加长按手势
+        let labelLongPress = UILongPressGestureRecognizer(target: self, action: #selector(labelLongPressed))
+        labelLongPress.minimumPressDuration = 0.8
+        titleLabel.addGestureRecognizer(labelLongPress)
     }
     
     @objc private func labelTapped() {
         print("[BoundingBoxView] labelTapped 被触发, objectID: \(objectID)")
         onLabelTapped?(objectID)
     }
+    
+    @objc private func labelLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        // 只在手势开始时触发一次
+        if gesture.state == .began {
+            print("[BoundingBoxView] labelLongPressed 被触发, objectID: \(objectID)")
+            onLabelLongPressed?(objectID)
+            
+            // 添加触觉反馈
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+        }
+    }
 }
 
 class ARLabelManager {
     private var detectedObjectBoxes: [String: BoundingBoxView] = [:]
     private let parentView: UIView
-    // 新增：标签点击回调
+    // 标签点击回调
     var onLabelTapped: ((String) -> Void)?
+    // 新增：标签长按回调
+    var onLabelLongPressed: ((String) -> Void)?
     
     init(parentView: UIView) {
         self.parentView = parentView
@@ -91,6 +120,9 @@ class ARLabelManager {
         boxView.objectID = objectID
         boxView.onLabelTapped = { [weak self] id in
             self?.onLabelTapped?(id)
+        }
+        boxView.onLabelLongPressed = { [weak self] id in
+            self?.onLabelLongPressed?(id)
         }
         boxView.alpha = 0
         UIView.animate(withDuration: 0.25) {
