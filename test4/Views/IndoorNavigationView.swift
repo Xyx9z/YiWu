@@ -609,12 +609,22 @@ class ARNavigationViewController: UIViewController {
     }
     
     private func removeAllGuideSpheres() {
+        // 移除所有导航球
         guideSpheres.forEach { $0.removeFromParentNode() }
         guideSpheres.removeAll()
+        
+        // 移除初始引导球
         initialGuideSphere?.removeFromParentNode()
         initialGuideSphere = nil
         guideTextNode?.removeFromParentNode()
         guideTextNode = nil
+        
+        // 移除所有箭头节点
+        arView.scene.rootNode.enumerateChildNodes { (node, _) in
+            if node.name?.contains("arrow") == true {
+                node.removeFromParentNode()
+            }
+        }
     }
     
     private func restoreGuideSpheres() {
@@ -636,6 +646,25 @@ class ARNavigationViewController: UIViewController {
                 arView.scene.rootNode.addChildNode(sphere)
             }
             sphere.isHidden = false
+        }
+        
+        // 重新创建引导球之间的箭头
+        // 首先移除现有箭头
+        arView.scene.rootNode.enumerateChildNodes { (node, _) in
+            if node.name?.contains("arrow") == true {
+                node.removeFromParentNode()
+            }
+        }
+        
+        // 如果有两个或更多球，就在它们之间添加箭头
+        if guideSpheres.count >= 2 {
+            for i in 0..<(guideSpheres.count - 1) {
+                let startSphere = guideSpheres[i]
+                let endSphere = guideSpheres[i+1]
+                
+                let arrow = createArrow(from: startSphere.position, to: endSphere.position, named: "arrow\(i+1)")
+                arView.scene.rootNode.addChildNode(arrow)
+            }
         }
     }
     
@@ -731,18 +760,87 @@ class ARNavigationViewController: UIViewController {
     
     private func createGuideSpheres() {
         let positions = [
+            (position: SCNVector3(1, 0, 1), name: "guideSphere0"),
             (position: SCNVector3(2, 0, 2), name: "guideSphere1"),
             (position: SCNVector3(3, 0, 1), name: "guideSphere2"),
             (position: SCNVector3(4, 0, 0), name: "guideSphere3"),
-            (position: SCNVector3(3, 0, -1), name: "guideSphere4"),
-            (position: SCNVector3(4, 0, -2), name: "guideSphere5")
+            (position: SCNVector3(3, 0, -1), name: "guideSphere4")
+            // 已删除最后一个导航球: (position: SCNVector3(4, 0, -2), name: "guideSphere5")
         ]
         
+        // 创建所有球体
         for (index, sphereData) in positions.enumerated() {
             let sphere = createGuideSphere(at: sphereData.position, named: sphereData.name, index: index)
             arView.scene.rootNode.addChildNode(sphere)
             guideSpheres.append(sphere)
+            
+            // 为特定小球添加文字提示
+            if index == 1 { // 第二个小球（索引为1，是guideSphere1）
+                addTextLabel(text: "请向左转", at: sphereData.position, yOffset: 0.2)
+            } else if index == 3 { // 第四个小球（索引为3，是guideSphere3）
+                addTextLabel(text: "请向左转", at: sphereData.position, yOffset: 0.2)
+            } else if index == positions.count - 1 { // 最后一个小球
+                addTextLabel(text: destination.name, at: sphereData.position, yOffset: 0.2)
+            }
         }
+        
+        // 添加球体之间的箭头 (除了最后一个球不需要添加箭头)
+        for i in 0..<(positions.count - 1) {
+            let startPosition = positions[i].position
+            let endPosition = positions[i+1].position
+            
+            let arrow = createArrow(from: startPosition, to: endPosition, named: "arrow\(i+1)")
+            arView.scene.rootNode.addChildNode(arrow)
+        }
+    }
+    
+    // 添加文字标签，始终朝向用户
+    private func addTextLabel(text: String, at position: SCNVector3, yOffset: Float) {
+        // 创建文本几何体
+        let textGeometry = SCNText(string: text, extrusionDepth: 0.01)
+        textGeometry.font = UIFont.systemFont(ofSize: 0.4) // 放大5倍，从0.08改为0.4
+        textGeometry.flatness = 0.1
+        textGeometry.alignmentMode = CATextLayerAlignmentMode.center.rawValue
+        
+        // 设置文本材质
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor.white
+        material.emission.contents = UIColor.white.withAlphaComponent(0.5) // 添加轻微发光效果
+        textGeometry.materials = [material]
+        
+        // 创建文本节点
+        let textNode = SCNNode(geometry: textGeometry)
+        
+        // 计算文本边界以便居中
+        let min = textNode.boundingBox.min
+        let max = textNode.boundingBox.max
+        textNode.pivot = SCNMatrix4MakeTranslation(
+            (max.x - min.x)/2 + min.x,
+            min.y,
+            min.z
+        )
+        
+        // 缩放文本到合适大小
+        textNode.scale = SCNVector3(0.5, 0.5, 0.5) // 放大5倍，从0.1改为0.5
+        
+        // 将文本定位在小球上方
+        let labelPosition = SCNVector3(position.x, position.y + yOffset, position.z)
+        textNode.position = labelPosition
+        
+        // 添加Billboard约束，使文本始终朝向用户
+        let billboardConstraint = SCNBillboardConstraint()
+        billboardConstraint.freeAxes = [.X, .Y, .Z] // 所有轴都自由旋转，确保始终面向用户
+        textNode.constraints = [billboardConstraint]
+        
+        // 添加发光效果
+        let light = SCNLight()
+        light.type = .ambient
+        light.color = UIColor.white
+        light.intensity = 500
+        textNode.light = light
+        
+        // 将文本节点添加到场景
+        arView.scene.rootNode.addChildNode(textNode)
     }
     
     private func createGuideSphere(at position: SCNVector3, named: String, index: Int) -> SCNNode {
@@ -773,6 +871,75 @@ class ARNavigationViewController: UIViewController {
         addPulseAnimation(to: sphereNode, withDelay: TimeInterval(index) * 0.2)
         
         return sphereNode
+    }
+    
+    // 创建从一个点指向另一个点的箭头
+    private func createArrow(from startPoint: SCNVector3, to endPoint: SCNVector3, named: String) -> SCNNode {
+        // 创建箭头容器节点
+        let arrowNode = SCNNode()
+        arrowNode.name = named
+        
+        // 计算两点之间的向量和距离
+        let direction = SCNVector3(endPoint.x - startPoint.x, 0, endPoint.z - startPoint.z)
+        let distance = sqrt(pow(direction.x, 2) + pow(direction.z, 2))
+        
+        // 创建箭头杆（圆柱体）
+        let shaftLength = distance * 0.8 // 箭头杆占总长度的80%
+        let shaftGeometry = SCNCylinder(radius: 0.01, height: CGFloat(shaftLength))
+        let shaftMaterial = SCNMaterial()
+        shaftMaterial.diffuse.contents = UIColor.systemBlue.withAlphaComponent(0.8)
+        shaftMaterial.emission.contents = UIColor.systemBlue.withAlphaComponent(0.5)
+        shaftGeometry.materials = [shaftMaterial]
+        
+        let shaftNode = SCNNode(geometry: shaftGeometry)
+        // 注意：圆柱体默认是沿Y轴的，我们需要将其旋转到Z轴
+        shaftNode.eulerAngles.x = Float.pi / 2
+        
+        // 创建箭头头部（圆锥体）
+        let headLength = distance * 0.2 // 箭头头部占总长度的20%
+        let headGeometry = SCNCone(topRadius: 0.0, bottomRadius: 0.025, height: CGFloat(headLength))
+        let headMaterial = SCNMaterial()
+        headMaterial.diffuse.contents = UIColor.systemBlue.withAlphaComponent(0.8)
+        headMaterial.emission.contents = UIColor.systemBlue.withAlphaComponent(0.5)
+        headGeometry.materials = [headMaterial]
+        
+        let headNode = SCNNode(geometry: headGeometry)
+        // 定位箭头头部到杆的末端
+        headNode.position = SCNVector3(0, 0, shaftLength / 2 + headLength / 2)
+        // 注意：圆锥体默认也是沿Y轴的，需要旋转
+        headNode.eulerAngles.x = Float.pi / 2
+        
+        // 将箭头杆和头部添加到容器节点
+        arrowNode.addChildNode(shaftNode)
+        arrowNode.addChildNode(headNode)
+        
+        // 计算箭头位置（两点之间的中点）
+        let midPoint = SCNVector3(
+            (startPoint.x + endPoint.x) / 2,
+            0.02, // 稍微抬高一点以避免与地面重叠
+            (startPoint.z + endPoint.z) / 2
+        )
+        arrowNode.position = midPoint
+        
+        // 重新实现方向计算 - 使用向量方向直接确定旋转角度
+        // 我们需要找到在XZ平面上从起点指向终点的方向
+        
+        // 归一化方向向量
+        let length = sqrt(direction.x * direction.x + direction.z * direction.z)
+        let normalized = SCNVector3(direction.x / length, 0, direction.z / length)
+        
+        // 计算与Z轴的角度（Z轴作为参考，因为我们的箭头默认沿Z轴）
+        let angleFromZ = atan2(normalized.x, normalized.z)
+        arrowNode.eulerAngles.y = angleFromZ
+        
+        // 为箭头添加淡淡的发光效果
+        let light = SCNLight()
+        light.type = .ambient
+        light.color = UIColor.systemBlue
+        light.intensity = 300
+        arrowNode.light = light
+        
+        return arrowNode
     }
     
     private func addPulseAnimation(to node: SCNNode, withDelay delay: TimeInterval) {
