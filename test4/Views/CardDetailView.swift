@@ -24,6 +24,7 @@ struct CardDetailView: View {
     @State private var showingEditSheet = false
     @State private var updatedCard: MemoryCard
     @Binding var tabSelection: Int
+    @State private var destination: Destination?
     
     init(card: MemoryCard, cardStore: MemoryCardStore, tabSelection: Binding<Int>) {
         self.card = card
@@ -96,45 +97,69 @@ struct CardDetailView: View {
                         .padding(.top, 12)
                         .padding(.bottom, 18)
                 }
+                
+                // 位置信息显示
+                if let dest = destination, dest.latitude != 0 || dest.longitude != 0 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("位置信息")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 4)
+                        
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.system(size: 18))
+                            Text("经度: \(String(format: "%.6f", dest.longitude)), 纬度: \(String(format: "%.6f", dest.latitude))")
+                                .font(.system(size: 15))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        if let notes = dest.notes, !notes.isEmpty {
+                            HStack(alignment: .top) {
+                                Image(systemName: "text.bubble")
+                                    .foregroundColor(.blue)
+                                    .font(.system(size: 18))
+                                    .padding(.top, 2)
+                                Text(notes)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemGray6).opacity(0.5))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+                }
+                
                 // 时间戳上方增加导航按钮
                 Button(action: {
-                    let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
-                    do {
-                        let destinations = try viewContext.fetch(fetchRequest)
-                        let matchingDestination = destinations.first { destination in
-                            return destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) == updatedCard.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        }
-                        if let destination = matchingDestination {
-                            // 检查坐标是否有效
-                            if destination.latitude != 0 && destination.longitude != 0 {
-                                alertMessage = "正在导航到：\(updatedCard.title)"
-                                
-                                // 设置目的地并跳转到IndoorNavigationView
-                                let locationData = LocationData(
-                                    coordinate: CLLocationCoordinate2D(
-                                        latitude: destination.latitude,
-                                        longitude: destination.longitude
-                                    ),
-                                    name: destination.name ?? updatedCard.title,
-                                    description: destination.notes
-                                )
-                                
-                                // 确保设置目的地
-                                NavigationService.shared.setDestination(locationData)
-                                print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
-                                
-                                // 直接切换到IndoorNavigation标签页
-                                tabSelection = 1
-                            } else {
-                                alertMessage = "该物品没有有效的位置信息"
-                                showAlert = true
-                            }
-                        } else {
-                            alertMessage = "未检索到物品"
-                            showAlert = true
-                        }
-                    } catch {
-                        alertMessage = "检索目的地时出错"
+                    if let dest = destination, dest.latitude != 0 && dest.longitude != 0 {
+                        alertMessage = "正在导航到：\(updatedCard.title)"
+                        
+                        // 设置目的地并跳转到IndoorNavigationView
+                        let locationData = LocationData(
+                            coordinate: CLLocationCoordinate2D(
+                                latitude: dest.latitude,
+                                longitude: dest.longitude
+                            ),
+                            name: dest.name ?? updatedCard.title,
+                            description: dest.notes
+                        )
+                        
+                        // 确保设置目的地
+                        NavigationService.shared.setDestination(locationData)
+                        print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
+                        
+                        // 直接切换到IndoorNavigation标签页
+                        tabSelection = 1
+                    } else {
+                        alertMessage = "该物品没有有效的位置信息"
                         showAlert = true
                     }
                 }) {
@@ -177,6 +202,7 @@ struct CardDetailView: View {
             if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
                 updatedCard = cardStore.cards[index]
             }
+            loadDestination() // 重新加载位置信息
         }) {
             CardEditView(cardStore: cardStore, card: updatedCard)
         }
@@ -185,6 +211,19 @@ struct CardDetailView: View {
             if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
                 updatedCard = cardStore.cards[index]
             }
+            loadDestination() // 加载位置信息
+        }
+    }
+    
+    private func loadDestination() {
+        let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
+        fetchRequest.predicate = NSPredicate(format: "name == %@", updatedCard.title.trimmingCharacters(in: .whitespacesAndNewlines))
+        
+        do {
+            let results = try viewContext.fetch(fetchRequest)
+            destination = results.first
+        } catch {
+            print("Error fetching destination: \(error)")
         }
     }
 }
