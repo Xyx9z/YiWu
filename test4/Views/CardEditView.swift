@@ -118,6 +118,97 @@ struct AdditionalImagesView: View {
     }
 }
 
+// 位置信息编辑组件
+struct LocationEditView: View {
+    @Binding var latitude: String
+    @Binding var longitude: String
+    @Binding var notes: String
+    let cardTitle: String
+    @Environment(\.managedObjectContext) private var viewContext
+    @State private var existingDestination: Destination?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("位置信息")
+                    .font(.title3.bold())
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            VStack(spacing: 12) {
+                // 纬度输入
+                HStack {
+                    Text("纬度:")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .frame(width: 60, alignment: .leading)
+                    
+                    TextField("纬度坐标", text: $latitude)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
+                
+                // 经度输入
+                HStack {
+                    Text("经度:")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .frame(width: 60, alignment: .leading)
+                    
+                    TextField("经度坐标", text: $longitude)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding(.horizontal)
+                
+                // 备注输入
+                HStack {
+                    Text("备注:")
+                        .font(.body)
+                        .foregroundColor(.gray)
+                        .frame(width: 60, alignment: .leading)
+                        .alignmentGuide(.leading) { d in d[.leading] }
+                    
+                    TextEditor(text: $notes)
+                        .frame(height: 80)
+                        .padding(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                }
+                .padding(.horizontal)
+            }
+            .padding(.bottom, 8)
+        }
+        .onAppear {
+            loadExistingDestination()
+        }
+    }
+    
+    private func loadExistingDestination() {
+        let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
+        fetchRequest.predicate = NSPredicate(format: "name == %@", cardTitle.trimmingCharacters(in: .whitespacesAndNewlines))
+        
+        do {
+            let results = try viewContext.fetch(fetchRequest)
+            if let destination = results.first {
+                existingDestination = destination
+                latitude = String(destination.latitude)
+                longitude = String(destination.longitude)
+                notes = destination.notes ?? ""
+            }
+        } catch {
+            print("Error fetching destination: \(error)")
+        }
+    }
+}
+
 struct CardEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
@@ -128,6 +219,9 @@ struct CardEditView: View {
     @State private var showingImagePicker = false
     @State private var isLoading = false
     @State private var isShowingFullScreenImage = false
+    @State private var latitude: String = ""
+    @State private var longitude: String = ""
+    @State private var locationNotes: String = ""
     
     init(cardStore: MemoryCardStore, card: MemoryCard? = nil) {
         self.cardStore = cardStore
@@ -168,6 +262,14 @@ struct CardEditView: View {
                             images: card.images,
                             onSelectImages: { items in selectedItems = items },
                             onDeleteImage: deleteImage,
+                            cardTitle: card.title
+                        )
+                        
+                        // 位置信息编辑区域
+                        LocationEditView(
+                            latitude: $latitude,
+                            longitude: $longitude,
+                            notes: $locationNotes,
                             cardTitle: card.title
                         )
                     }
@@ -269,6 +371,28 @@ struct CardEditView: View {
                     .statusBar(hidden: true)
                 }
             }
+            .onAppear {
+                loadExistingDestination()
+            }
+            .onChange(of: card.title) { newTitle in
+                loadExistingDestination()
+            }
+        }
+    }
+    
+    private func loadExistingDestination() {
+        let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
+        fetchRequest.predicate = NSPredicate(format: "name == %@", card.title.trimmingCharacters(in: .whitespacesAndNewlines))
+        
+        do {
+            let results = try viewContext.fetch(fetchRequest)
+            if let destination = results.first {
+                latitude = String(destination.latitude)
+                longitude = String(destination.longitude)
+                locationNotes = destination.notes ?? ""
+            }
+        } catch {
+            print("Error fetching destination: \(error)")
         }
     }
     
@@ -286,6 +410,9 @@ struct CardEditView: View {
             cardStore.cards.append(card)
         }
         
+        // 保存卡片对应的目的地信息
+        saveDestination()
+        
         Task {
             do {
                 try await cardStore.save()
@@ -295,6 +422,50 @@ struct CardEditView: View {
         }
         
         dismiss()
+    }
+    
+    private func saveDestination() {
+        guard !card.title.isEmpty,
+              let lat = Double(latitude),
+              let long = Double(longitude) else {
+            return
+        }
+        
+        let trimmedTitle = card.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
+        fetchRequest.predicate = NSPredicate(format: "name == %@", trimmedTitle)
+        
+        // 获取卡片的第一张图片数据（如果有）
+        let imageData = card.images.first?.imageData
+        
+        do {
+            let results = try viewContext.fetch(fetchRequest)
+            let destination: Destination
+            
+            if let existingDestination = results.first {
+                // 更新现有目的地
+                destination = existingDestination
+            } else {
+                // 创建新目的地
+                destination = Destination(context: viewContext)
+                destination.id = UUID()
+                destination.name = trimmedTitle
+                destination.timestamp = Date()
+            }
+            
+            destination.latitude = lat
+            destination.longitude = long
+            destination.notes = locationNotes
+            
+            try viewContext.save()
+            
+            // 保存图片到目的地
+            if let id = destination.id?.uuidString {
+                DestinationImageManager.shared.saveImage(imageData, for: id)
+            }
+        } catch {
+            print("保存目的地失败: \(error)")
+        }
     }
 }
 
