@@ -1,13 +1,188 @@
 import SwiftUI
 import PhotosUI
+import CoreData
+import CoreLocation
+
+// 主图片视图组件
+struct MainImageView: View {
+    let image: UIImage?
+    let onTapImage: () -> Void
+    let onSelectNewImage: (PhotosPickerItem?) -> Void
+    
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: UIScreen.main.bounds.height * 0.4)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onTapImage)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.1))
+                        .frame(height: UIScreen.main.bounds.height * 0.4)
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: "photo.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.gray)
+                                Text("添加封面图片")
+                                    .font(.headline)
+                                    .foregroundColor(.gray)
+                            }
+                        )
+                }
+            }
+            .background(Color.white)
+            
+            // 编辑按钮
+            PhotosPicker(selection: .init(get: { nil }, set: onSelectNewImage),
+                        matching: .images) {
+                Image(systemName: "pencil.circle.fill")
+                    .font(.title)
+                    .foregroundColor(.white)
+                    .padding(8)
+                    .background(Color.black.opacity(0.6))
+                    .clipShape(Circle())
+                    .padding(8)
+            }
+        }
+    }
+}
+
+// 附加图片视图组件
+struct AdditionalImagesView: View {
+    let images: [ImageData]
+    let onSelectImages: ([PhotosPickerItem]) -> Void
+    let onDeleteImage: (ImageData) -> Void
+    let cardTitle: String
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var navigateToIndoor = false
+    @Environment(\.managedObjectContext) private var viewContext
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("附加图片")
+                    .font(.title3.bold())
+                    .foregroundColor(.black)
+                
+                Spacer()
+                
+                Button(action: {
+                    let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
+                    do {
+                        let destinations = try viewContext.fetch(fetchRequest)
+                        let matchingDestination = destinations.first { destination in
+                            return destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) == cardTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                        
+                        if let destination = matchingDestination {
+                            alertMessage = "正在导航到：\(cardTitle)"
+                            navigateToIndoor = true
+                        } else {
+                            alertMessage = "未检索到物品"
+                            showAlert = true
+                        }
+                    } catch {
+                        alertMessage = "检索目的地时出错"
+                        showAlert = true
+                    }
+                }) {
+                    Text("导航到该物品")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.green)
+                        )
+                }
+                .alert(alertMessage, isPresented: $showAlert) {
+                    Button("确定", role: .cancel) {}
+                }
+                .fullScreenCover(isPresented: $navigateToIndoor) {
+                    if let destination = try? viewContext.fetch(NSFetchRequest<Destination>(entityName: "Destination")).first(where: { 
+                        $0.name?.trimmingCharacters(in: .whitespacesAndNewlines) == cardTitle.trimmingCharacters(in: .whitespacesAndNewlines) 
+                    }) {
+                        let locationData = LocationData(
+                            coordinate: CLLocationCoordinate2D(
+                                latitude: destination.latitude,
+                                longitude: destination.longitude
+                            ),
+                            name: destination.name ?? "",
+                            description: destination.notes
+                        )
+                        IndoorNavigationView()
+                            .onAppear {
+                                NavigationService.shared.setDestination(locationData)
+                            }
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    PhotosPicker(selection: .init(get: { [] }, set: onSelectImages),
+                               maxSelectionCount: 4,
+                               matching: .images) {
+                        VStack {
+                            Image(systemName: "plus.circle.fill")
+                                .resizable()
+                                .frame(width: 30, height: 30)
+                            Text("添加图片")
+                                .font(.caption)
+                        }
+                        .frame(width: 100, height: 100)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    
+                    ForEach(images.dropFirst()) { imageData in
+                        if let uiImage = UIImage(data: imageData.imageData) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    Button(action: { onDeleteImage(imageData) }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.red)
+                                            .padding(4)
+                                    }
+                                    .offset(x: 6, y: -6),
+                                    alignment: .topTrailing
+                                )
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(height: 120)
+            .padding(.bottom, 8)
+        }
+    }
+}
 
 struct CardEditView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.managedObjectContext) private var viewContext
     @ObservedObject var cardStore: MemoryCardStore
     @State private var card: MemoryCard
     @State private var selectedItems: [PhotosPickerItem] = []
+    @State private var mainImageItem: PhotosPickerItem?
     @State private var showingImagePicker = false
     @State private var isLoading = false
+    @State private var isShowingFullScreenImage = false
     
     init(cardStore: MemoryCardStore, card: MemoryCard? = nil) {
         self.cardStore = cardStore
@@ -16,69 +191,43 @@ struct CardEditView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                // 标题输入框
-                TextField("输入卡片标题", text: $card.title)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .font(.headline)
-                    .padding(.horizontal)
-                
-                // 内容编辑区
-                TextEditor(text: $card.content)
-                    .frame(height: 200)
-                    .padding(4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            ScrollView {
+                VStack(spacing: 20) {
+                    // 主图片区域
+                    MainImageView(
+                        image: card.images.first.flatMap { UIImage(data: $0.imageData) },
+                        onTapImage: { isShowingFullScreenImage = true },
+                        onSelectNewImage: { item in mainImageItem = item }
                     )
-                    .padding(.horizontal)
-                
-                // 图片区域
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        // 添加图片按钮
-                        PhotosPicker(selection: $selectedItems,
-                                   maxSelectionCount: 4,
-                                   matching: .images) {
-                            VStack {
-                                Image(systemName: "plus.circle.fill")
-                                    .resizable()
-                                    .frame(width: 30, height: 30)
-                                Text("添加图片")
-                                    .font(.caption)
-                            }
-                            .frame(width: 100, height: 100)
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(8)
-                        }
+                    
+                    VStack(spacing: 16) {
+                        // 标题输入框
+                        TextField("输入卡片标题", text: $card.title)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(.system(size: 32))
+                            .frame(height: 60)
+                            .padding(.horizontal)
                         
-                        // 已选图片预览
-                        ForEach(card.images) { imageData in
-                            if let uiImage = UIImage(data: imageData.imageData) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    .overlay(
-                                        Button(action: {
-                                            deleteImage(imageData)
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.red)
-                                                .padding(4)
-                                        }
-                                        .offset(x: 6, y: -6),
-                                        alignment: .topTrailing
-                                    )
-                            }
-                        }
+                        // 内容编辑区
+                        TextEditor(text: $card.content)
+                            .frame(height: 100)
+                            .padding(4)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                            .padding(.horizontal)
+                        
+                        // 附加图片区域
+                        AdditionalImagesView(
+                            images: card.images,
+                            onSelectImages: { items in selectedItems = items },
+                            onDeleteImage: deleteImage,
+                            cardTitle: card.title
+                        )
                     }
-                    .padding(.horizontal)
+                    .padding(.top, 8)
                 }
-                .frame(height: 120)
-                
-                Spacer()
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -86,6 +235,10 @@ struct CardEditView: View {
                     Button("取消") {
                         dismiss()
                     }
+                }
+                ToolbarItem(placement: .principal) {
+                    Text("记忆卡片")
+                        .font(.headline)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
@@ -110,6 +263,22 @@ struct CardEditView: View {
                     isLoading = false
                 }
             }
+            .onChange(of: mainImageItem) { item in
+                Task {
+                    isLoading = true
+                    if let item = item,
+                       let data = try? await item.loadTransferable(type: Data.self) {
+                        let newImage = ImageData(imageData: data)
+                        if card.images.isEmpty {
+                            card.images.append(newImage)
+                        } else {
+                            card.images[0] = newImage
+                        }
+                    }
+                    mainImageItem = nil
+                    isLoading = false
+                }
+            }
             .overlay(
                 Group {
                     if isLoading {
@@ -120,6 +289,41 @@ struct CardEditView: View {
                     }
                 }
             )
+            .fullScreenCover(isPresented: $isShowingFullScreenImage) {
+                if let firstImage = card.images.first,
+                   let uiImage = UIImage(data: firstImage.imageData) {
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                        VStack {
+                            HStack {
+                                Spacer()
+                                Button(action: {
+                                    isShowingFullScreenImage = false
+                                }) {
+                                    Image(systemName: "xmark")
+                                        .font(.title2.bold())
+                                        .foregroundColor(.white)
+                                        .padding(8)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.red)
+                                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                                        )
+                                }
+                                .padding()
+                            }
+                            Spacer()
+                        }
+                    }
+                    .statusBar(hidden: true)
+                }
+            }
         }
     }
     
@@ -137,7 +341,6 @@ struct CardEditView: View {
             cardStore.cards.append(card)
         }
         
-        // 保存到本地存储
         Task {
             try? await cardStore.save()
         }
