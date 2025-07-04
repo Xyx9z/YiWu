@@ -60,9 +60,6 @@ struct AdditionalImagesView: View {
     let onSelectImages: ([PhotosPickerItem]) -> Void
     let onDeleteImage: (ImageData) -> Void
     let cardTitle: String
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    @State private var navigateToIndoor = false
     @Environment(\.managedObjectContext) private var viewContext
     
     var body: some View {
@@ -73,58 +70,6 @@ struct AdditionalImagesView: View {
                     .foregroundColor(.black)
                 
                 Spacer()
-                
-                Button(action: {
-                    let fetchRequest = NSFetchRequest<Destination>(entityName: "Destination")
-                    do {
-                        let destinations = try viewContext.fetch(fetchRequest)
-                        let matchingDestination = destinations.first { destination in
-                            return destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) == cardTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                        }
-                        
-                        if let destination = matchingDestination {
-                            alertMessage = "正在导航到：\(cardTitle)"
-                            navigateToIndoor = true
-                        } else {
-                            alertMessage = "未检索到物品"
-                            showAlert = true
-                        }
-                    } catch {
-                        alertMessage = "检索目的地时出错"
-                        showAlert = true
-                    }
-                }) {
-                    Text("导航到该物品")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.green)
-                        )
-                }
-                .alert(alertMessage, isPresented: $showAlert) {
-                    Button("确定", role: .cancel) {}
-                }
-                .fullScreenCover(isPresented: $navigateToIndoor) {
-                    if let destination = try? viewContext.fetch(NSFetchRequest<Destination>(entityName: "Destination")).first(where: { 
-                        $0.name?.trimmingCharacters(in: .whitespacesAndNewlines) == cardTitle.trimmingCharacters(in: .whitespacesAndNewlines) 
-                    }) {
-                        let locationData = LocationData(
-                            coordinate: CLLocationCoordinate2D(
-                                latitude: destination.latitude,
-                                longitude: destination.longitude
-                            ),
-                            name: destination.name ?? "",
-                            description: destination.notes
-                        )
-                        IndoorNavigationView()
-                            .onAppear {
-                                NavigationService.shared.setDestination(locationData)
-                            }
-                    }
-                }
             }
             .padding(.horizontal)
             .padding(.top, 8)
@@ -247,12 +192,12 @@ struct CardEditView: View {
                     .disabled(card.title.isEmpty)
                 }
             }
-            .onChange(of: selectedItems) { items in
+            .onChange(of: selectedItems) { newItems in
                 Task {
                     isLoading = true
                     var newImages: [ImageData] = []
                     
-                    for item in items {
+                    for item in newItems {
                         if let data = try? await item.loadTransferable(type: Data.self) {
                             newImages.append(ImageData(imageData: data))
                         }
@@ -263,10 +208,10 @@ struct CardEditView: View {
                     isLoading = false
                 }
             }
-            .onChange(of: mainImageItem) { item in
+            .onChange(of: mainImageItem) { newItem in
                 Task {
                     isLoading = true
-                    if let item = item,
+                    if let item = newItem,
                        let data = try? await item.loadTransferable(type: Data.self) {
                         let newImage = ImageData(imageData: data)
                         if card.images.isEmpty {
@@ -342,7 +287,11 @@ struct CardEditView: View {
         }
         
         Task {
-            try? await cardStore.save()
+            do {
+                try await cardStore.save()
+            } catch {
+                print("保存卡片失败: \(error.localizedDescription)")
+            }
         }
         
         dismiss()
