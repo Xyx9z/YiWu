@@ -56,15 +56,28 @@ class ARObjectDetectionViewController: UIViewController {
         yoloDetector.delegate = self
         
         labelManager = ARLabelManager(parentView: sceneView)
-        // 设置2D标签点击回调，弹出自定义标签弹窗
+        // 设置2D标签点击回调，直接查找并显示记忆卡片
         labelManager.onLabelTapped = { [weak self] objectID in
             print("[onLabelTapped] 被点击的objectID: \(objectID)")
-            self?.promptForCustomName(objectID: objectID)
+            self?.findAndShowMemoryCard(objectName: objectID)
         }
         
+        // 设置2D标签长按回调，显示编辑对话框
+        labelManager.onLabelLongPressed = { [weak self] objectID in
+            print("[onLabelLongPressed] 被长按的objectID: \(objectID)")
+            self?.showCustomNameInput(objectID: objectID)
+        }
+        
+        // 添加点击手势
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         sceneView.addGestureRecognizer(tapGesture)
         tapGesture.cancelsTouchesInView = false
+        
+        // 添加长按手势
+        let longPressGesture = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPressGesture.minimumPressDuration = 0.8
+        sceneView.addGestureRecognizer(longPressGesture)
+        longPressGesture.cancelsTouchesInView = false
         
         // 加载记忆卡片
         Task {
@@ -92,7 +105,25 @@ class ARObjectDetectionViewController: UIViewController {
         
         if let node = hitResults.first?.node,
            let objectID = findObjectID(for: node) {
-            promptForCustomName(objectID: objectID)
+            findAndShowMemoryCard(objectName: objectID)
+        }
+    }
+    
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        // 只在手势开始时触发一次
+        if gesture.state == .began {
+            let location = gesture.location(in: sceneView)
+            let hitResults = sceneView.hitTest(location, options: nil)
+            
+            if let node = hitResults.first?.node,
+               let objectID = findObjectID(for: node) {
+                // 添加触觉反馈
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+                
+                // 显示编辑对话框
+                showCustomNameInput(objectID: objectID)
+            }
         }
     }
     
@@ -108,26 +139,145 @@ class ARObjectDetectionViewController: UIViewController {
     }
     
     private func promptForCustomName(objectID: String) {
-        let alert = UIAlertController(title: "自定义标签", message: "请输入新名称", preferredStyle: .alert)
-        alert.addTextField { [weak self] textField in
-            textField.placeholder = "输入新名称"
-            textField.text = self?.labelManager.getCustomName(for: objectID)
-        }
+        let alert = UIAlertController(title: "物品标签", message: "请选择操作", preferredStyle: .alert)
         
-        // 添加查询按钮，使用蓝色风格使其更为突出
-        alert.addAction(UIAlertAction(title: "查询水杯", style: .default) { [weak self] _ in
-            self?.openWaterBottleCard()
+        // 添加"查找记忆卡片"按钮
+        alert.addAction(UIAlertAction(title: "查找记忆卡片", style: .default) { [weak self] _ in
+            self?.findAndShowMemoryCard(objectName: objectID)
         })
         
-        alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self] _ in
-            if let name = alert.textFields?.first?.text {
-                self?.labelManager.saveCustomName(name, for: objectID)
-                self?.labelManager.refreshBoundingBox(for: objectID, confidence: 1.0)
-            }
+        // 添加"自定义标签"按钮
+        alert.addAction(UIAlertAction(title: "自定义标签", style: .default) { [weak self] _ in
+            self?.showCustomNameInput(objectID: objectID)
         })
         
         alert.addAction(UIAlertAction(title: "取消", style: .cancel))
         present(alert, animated: true)
+    }
+    
+    // 修改方法：显示自定义标签输入界面，增加更多选项和视觉提示
+    private func showCustomNameInput(objectID: String) {
+        // 获取当前自定义名称（如果有）
+        let currentName = labelManager.getCustomName(for: objectID) ?? objectID
+        
+        let alert = UIAlertController(title: "编辑物品名称", message: "当前名称: \(currentName)", preferredStyle: .alert)
+        alert.addTextField { [weak self] textField in
+            textField.placeholder = "输入新名称"
+            textField.text = self?.labelManager.getCustomName(for: objectID) ?? objectID
+            textField.clearButtonMode = .whileEditing
+            textField.autocapitalizationType = .none
+            textField.returnKeyType = .done
+        }
+        
+        // 保存按钮
+        let saveAction = UIAlertAction(title: "保存", style: .default) { [weak self] _ in
+            guard let self = self, let name = alert.textFields?.first?.text, !name.isEmpty else { return }
+            
+            // 保存自定义名称
+            self.labelManager.saveCustomName(name, for: objectID)
+            self.labelManager.refreshBoundingBox(for: objectID, confidence: 1.0)
+            
+            // 显示成功提示
+            let successAlert = UIAlertController(title: nil, message: "名称已更新", preferredStyle: .alert)
+            self.present(successAlert, animated: true)
+            
+            // 1秒后自动关闭提示
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                successAlert.dismiss(animated: true)
+            }
+        }
+        
+        // 查找卡片按钮
+        let findCardAction = UIAlertAction(title: "查找记忆卡片", style: .default) { [weak self] _ in
+            self?.findAndShowMemoryCard(objectName: objectID)
+        }
+        
+        // 取消按钮
+        let cancelAction = UIAlertAction(title: "取消", style: .cancel)
+        
+        // 添加按钮到对话框
+        alert.addAction(saveAction)
+        alert.addAction(findCardAction)
+        alert.addAction(cancelAction)
+        
+        // 设置首选按钮
+        alert.preferredAction = saveAction
+        
+        present(alert, animated: true) {
+            // 对话框显示后，自动选中文本框中的文本
+            if let textField = alert.textFields?.first {
+                textField.selectAll(nil)
+            }
+        }
+    }
+    
+    // 新方法：查找并显示记忆卡片
+    private func findAndShowMemoryCard(objectName: String) {
+        // 显示加载指示器
+        let loadingAlert = UIAlertController(title: nil, message: "正在查找记忆卡片...", preferredStyle: .alert)
+        let loadingIndicator = UIActivityIndicatorView(frame: CGRect(x: 10, y: 5, width: 50, height: 50))
+        loadingIndicator.hidesWhenStopped = true
+        loadingIndicator.style = .medium
+        loadingIndicator.startAnimating()
+        
+        loadingAlert.view.addSubview(loadingIndicator)
+        present(loadingAlert, animated: true)
+        
+        // 获取自定义名称（如果有）
+        let customName = labelManager.getCustomName(for: objectName) ?? objectName
+        
+        // 查找标题匹配的卡片
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            
+            // 关闭加载指示器
+            self.dismiss(animated: true) {
+                if let matchingCard = self.cardStore.cards.first(where: { $0.title == customName }) {
+                    // 创建并展示CardDetailView，并提供CoreData上下文
+                    let context = PersistenceController.shared.container.viewContext
+                    
+                    // 创建一个可以切换标签的TabSelection绑定
+                    let tabSelectionBinding = Binding<Int>(
+                        get: { 0 },
+                        set: { newValue in
+                            // 当设置为1(导航标签)时，先关闭当前视图，然后切换到主视图的导航标签
+                            if newValue == 1 {
+                                self.dismiss(animated: true) {
+                                    // 通过NotificationCenter发送通知，让ContentView切换标签
+                                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
+                                }
+                            }
+                        }
+                    )
+                    
+                    // 创建CardDetailView
+                    let cardDetailView = CardDetailView(
+                        card: matchingCard,
+                        cardStore: self.cardStore,
+                        tabSelection: tabSelectionBinding
+                    )
+                    .environment(\.managedObjectContext, context)
+                    
+                    // 包装在NavigationView中以显示导航栏
+                    let hostingController = UIHostingController(
+                        rootView: NavigationView {
+                            cardDetailView
+                        }
+                    )
+                    
+                    self.present(hostingController, animated: true)
+                } else {
+                    // 未找到对应卡片，显示提示
+                    let alert = UIAlertController(
+                        title: "未找到记忆卡片",
+                        message: "未找到与\"\(customName)\"匹配的记忆卡片",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "确定", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
     }
     
     // 添加打开水杯卡片的方法
@@ -149,13 +299,39 @@ class ARObjectDetectionViewController: UIViewController {
             // 关闭加载指示器
             self.dismiss(animated: true) {
                 if let waterBottleCard = self.cardStore.cards.first(where: { $0.title == "我的水杯" }) {
-                    // 创建并展示CardEditView，并提供CoreData上下文
+                    // 创建并展示CardDetailView，并提供CoreData上下文
                     let context = PersistenceController.shared.container.viewContext
-                    let cardEditView = UIHostingController(
-                        rootView: CardEditView(cardStore: self.cardStore, card: waterBottleCard)
-                            .environment(\.managedObjectContext, context)
+                    
+                    // 创建一个可以切换标签的TabSelection绑定
+                    let tabSelectionBinding = Binding<Int>(
+                        get: { 0 },
+                        set: { newValue in
+                            // 当设置为1(导航标签)时，先关闭当前视图，然后切换到主视图的导航标签
+                            if newValue == 1 {
+                                self.dismiss(animated: true) {
+                                    // 通过NotificationCenter发送通知，让ContentView切换标签
+                                    NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
+                                }
+                            }
+                        }
                     )
-                    self.present(cardEditView, animated: true)
+                    
+                    // 创建CardDetailView
+                    let cardDetailView = CardDetailView(
+                        card: waterBottleCard,
+                        cardStore: self.cardStore,
+                        tabSelection: tabSelectionBinding
+                    )
+                    .environment(\.managedObjectContext, context)
+                    
+                    // 包装在NavigationView中以显示导航栏
+                    let hostingController = UIHostingController(
+                        rootView: NavigationView {
+                            cardDetailView
+                        }
+                    )
+                    
+                    self.present(hostingController, animated: true)
                 } else {
                     // 未找到对应卡片，显示提示
                     let alert = UIAlertController(title: "未找到", message: "未找到'我的水杯'的记忆卡片", preferredStyle: .alert)
