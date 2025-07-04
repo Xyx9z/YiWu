@@ -17,6 +17,10 @@ class NavigationService {
         self.destination = destination
     }
     
+    func getDestination() -> LocationData? {
+        return destination
+    }
+    
     func setCurrentLocation(_ location: CLLocation) {
         self.currentLocation = location
     }
