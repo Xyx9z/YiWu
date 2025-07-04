@@ -83,14 +83,13 @@ struct MainListView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(cardStore.cards) { card in
-                                    CardGridItem(card: card)
-                                        .onTapGesture {
-                                            selectedCard = card
-                                        }
-                                        .onLongPressGesture {
-                                            cardToDelete = card
-                                            showingDeleteAlert = true
-                                        }
+                                    NavigationLink(destination: CardDetailView(card: card)) {
+                                        CardGridItem(card: card)
+                                    }
+                                    .simultaneousGesture(LongPressGesture().onEnded { _ in
+                                        cardToDelete = card
+                                        showingDeleteAlert = true
+                                    })
                                 }
                             }
                             .padding(.horizontal, 32)
@@ -141,9 +140,6 @@ struct MainListView: View {
                 }
                 .sheet(isPresented: $showingAddCard) {
                     CardEditView(cardStore: cardStore)
-                }
-                .sheet(item: $selectedCard) { card in
-                    CardEditView(cardStore: cardStore, card: card)
                 }
                 .alert("删除卡片", isPresented: $showingDeleteAlert) {
                     Button("取消", role: .cancel) {}
