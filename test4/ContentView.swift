@@ -52,15 +52,7 @@ struct ContentView: View {
                     }
                     .tag(2)
             }
-
-            // 添加分隔线
-            VStack {
-                Divider()
-                    .background(Color.gray)
-                    .frame(height: 0.5) // 非常细的线
-                Spacer().frame(height: 49) // TabBar的高度
-            }
-            .edgesIgnoringSafeArea(.bottom)
+           .edgesIgnoringSafeArea(.bottom)
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
