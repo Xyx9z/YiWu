@@ -218,6 +218,12 @@ struct DestinationPickerView: View {
     @State private var newDestinationLongitude = ""
     @State private var newDestinationNotes = ""
     
+    // 定义网格布局
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+    
     init(selectedDestination: Binding<LocationData?>) {
         self._selectedDestination = selectedDestination
         self._destinationStore = StateObject(wrappedValue: DestinationStore(context: PersistenceController.shared.container.viewContext))
@@ -225,52 +231,94 @@ struct DestinationPickerView: View {
     
     var body: some View {
         NavigationView {
-            List {
-                ForEach(destinationStore.destinations) { destination in
-                    Button(action: {
-                        let name = destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        print("选择目的地：\(name)")
-                        selectedDestination = LocationData(
-                            coordinate: CLLocationCoordinate2D(
-                                latitude: destination.latitude,
-                                longitude: destination.longitude
-                            ),
-                            name: name,
-                            description: destination.notes
-                        )
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        VStack(alignment: .leading) {
-                            Text(destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "未命名位置")
-                                .font(.headline)
-                            Text("经度: \(destination.longitude), 纬度: \(destination.latitude)")
-                                .font(.subheadline)
-                            if let notes = destination.notes, !notes.isEmpty {
-                                Text(notes)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+            ZStack {
+                // 背景图片
+                Image("SunsetBackground")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .ignoresSafeArea()
+                    .opacity(0.7)
+                    .overlay(
+                        Color.black.opacity(0.1)
+                    )
+                
+                // 装饰性气泡
+                Circle()
+                    .fill(Color(hex: "#EDFFC9"))
+                    .opacity(0.7)
+                    .frame(width: 180, height: 180)
+                    .shadow(color: .white.opacity(0.3), radius: 10, x: 0, y: 0)
+                    .position(x: 50, y: 100)
+                
+                Circle()
+                    .fill(Color(hex: "#EDFFC9"))
+                    .opacity(0.7)
+                    .frame(width: 120, height: 120)
+                    .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 0)
+                    .position(x: UIScreen.main.bounds.width - 40, y: 200)
+                
+                // 主要内容
+                VStack(spacing: 0) {
+                    // 记忆卡片样式显示目的地
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(destinationStore.destinations) { destination in
+                                DestinationCard(destination: destination) {
+                                    // 点击选择目的地
+                                    let name = destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                    selectedDestination = LocationData(
+                                        coordinate: CLLocationCoordinate2D(
+                                            latitude: destination.latitude,
+                                            longitude: destination.longitude
+                                        ),
+                                        name: name,
+                                        description: destination.notes
+                                    )
+                                    presentationMode.wrappedValue.dismiss()
+                                }
                             }
                         }
-                    }
-                }
-                .onDelete { indexSet in
-                    for index in indexSet {
-                        let destination = destinationStore.destinations[index]
-                        destinationStore.deleteDestination(destination)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 12)
+                        .padding(.bottom, 80)
                     }
                 }
             }
-            .navigationTitle("选择目的地")
-            .navigationBarItems(
-                leading: Button("取消") {
-                    presentationMode.wrappedValue.dismiss()
-                },
-                trailing: Button(action: {
-                    showingAddForm = true
-                }) {
-                    Image(systemName: "plus")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text("选择目的地")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color.white, Color(hex: "#E0ECFF")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .shadow(color: Color.black.opacity(0.35), radius: 3, x: 0, y: 2)
+                        Rectangle()
+                            .fill(Color.white.opacity(0.18))
+                            .frame(height: 1)
+                            .padding(.top, 4)
+                    }
                 }
-            )
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    .foregroundColor(.white)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingAddForm = true
+                    }) {
+                        Image(systemName: "plus")
+                            .foregroundColor(.white)
+                    }
+                }
+            }
             .sheet(isPresented: $showingAddForm) {
                 NavigationView {
                     Form {
@@ -316,6 +364,106 @@ struct DestinationPickerView: View {
         newDestinationLongitude = ""
         newDestinationNotes = ""
         showingAddForm = false
+    }
+}
+
+// 目的地卡片组件
+struct DestinationCard: View {
+    let destination: Destination
+    let onTap: () -> Void
+    @State private var destinationImage: UIImage?
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                // 图片区域
+                ZStack {
+                    if let image = destinationImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 140)
+                            .clipped()
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(height: 140)
+                            .overlay(
+                                Image(systemName: "mappin.and.ellipse")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: 50)
+                                    .foregroundColor(.blue.opacity(0.7))
+                            )
+                    }
+                    
+                    // 位置坐标展示
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Text(String(format: "%.4f, %.4f", destination.latitude, destination.longitude))
+                                .font(.system(size: 10))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.black.opacity(0.6))
+                                .cornerRadius(4)
+                                .padding(8)
+                        }
+                    }
+                }
+                .cornerRadius(8, corners: [.topLeft, .topRight])
+                
+                // 标题和内容区域
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "未命名位置")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    if let notes = destination.notes, !notes.isEmpty {
+                        Text(notes)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
+            }
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.15), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onAppear {
+            loadDestinationImage()
+        }
+    }
+    
+    private func loadDestinationImage() {
+        if let id = destination.id?.uuidString {
+            destinationImage = DestinationImageManager.shared.getImage(for: id)
+        }
+    }
+}
+
+// 圆角扩展
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(roundedRect: rect, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
+        return Path(path.cgPath)
     }
 }
 
