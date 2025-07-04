@@ -6,6 +6,8 @@ struct MainListView: View {
     @State private var selectedCard: MemoryCard?
     @State private var showingDeleteAlert = false
     @State private var cardToDelete: MemoryCard?
+    // 新增：顶部Tab切换
+    @State private var selectedTab: Int = 0 // 0-物品，1-事件
     
     // 定义网格布局
     private let columns = [
@@ -56,38 +58,88 @@ struct MainListView: View {
                     .position(x: 60, y: UIScreen.main.bounds.height - 200)
                 
                 // 主要内容
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(cardStore.cards) { card in
-                            CardGridItem(card: card)
-                                .onTapGesture {
-                                    selectedCard = card
-                                }
-                                .onLongPressGesture {
-                                    cardToDelete = card
-                                    showingDeleteAlert = true
-                                }
+                VStack(spacing: 0) {
+                    // 新版：顶部Tab切换，左对齐，白色字体
+                    HStack(spacing: 28) {
+                        Button(action: { selectedTab = 0 }) {
+                            Text("物品")
+                                .font(.system(size: 16, weight: selectedTab == 0 ? .bold : .regular))
+                                .foregroundColor(.white)
+                        }
+                        Button(action: { selectedTab = 1 }) {
+                            Text("事件")
+                                .font(.system(size: 16, weight: selectedTab == 1 ? .bold : .regular))
+                                .foregroundColor(.white)
                         }
                     }
-                    .padding(.horizontal, 32) // 增加左右边距，给边缘留出更多空间
-                    .padding(.top, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 8)
+                    .padding(.leading, 40)
+                    .padding(.bottom, 4)
+                    
+                    // Tab内容区
+                    if selectedTab == 0 {
+                        // 物品Tab内容
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(cardStore.cards) { card in
+                                    NavigationLink(destination: CardDetailView(card: card)) {
+                                        CardGridItem(card: card)
+                                    }
+                                    .simultaneousGesture(LongPressGesture().onEnded { _ in
+                                        cardToDelete = card
+                                        showingDeleteAlert = true
+                                    })
+                                }
+                            }
+                            .padding(.horizontal, 32)
+                            .padding(.top, 12)
+                        }
+                    } else {
+                        // 事件Tab内容（占位）
+                        VStack {
+                            Spacer()
+                            Text("这里是事件Tab内容")
+                                .foregroundColor(.secondary)
+                                .font(.title3)
+                            Spacer()
+                        }
+                    }
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    // 居中美观标题
+                    ToolbarItem(placement: .principal) {
+                        VStack(spacing: 0) {
+                            Text("我的记忆卡片")
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [Color.white, Color(hex: "#E0ECFF")],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .shadow(color: Color.black.opacity(0.35), radius: 3, x: 0, y: 2)
+                            // 新增：标题下方分割线
+                            Rectangle()
+                                .fill(Color.white.opacity(0.18))
+                                .frame(height: 1)
+                                .padding(.top, 4)
+                        }
+                    }
+                    // 右侧+按钮
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
                             showingAddCard = true
                         }) {
                             Image(systemName: "plus")
-                                .foregroundColor(.white) // 使加号按钮在深色背景上更显眼
+                                .foregroundColor(.white)
                         }
                     }
                 }
                 .sheet(isPresented: $showingAddCard) {
                     CardEditView(cardStore: cardStore)
-                }
-                .sheet(item: $selectedCard) { card in
-                    CardEditView(cardStore: cardStore, card: card)
                 }
                 .alert("删除卡片", isPresented: $showingDeleteAlert) {
                     Button("取消", role: .cancel) {}
