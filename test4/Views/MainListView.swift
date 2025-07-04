@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import CoreLocation
 
 struct MainListView: View {
     @StateObject private var cardStore = MemoryCardStore()
@@ -8,6 +10,24 @@ struct MainListView: View {
     @State private var cardToDelete: MemoryCard?
     // 新增：顶部Tab切换
     @State private var selectedTab: Int = 0 // 0-物品，1-事件
+    
+    // 新增：语音识别相关状态
+    @StateObject private var audioRecorder = AudioRecorder()
+    @State private var transcriptionText: String = ""
+    @State private var isTranscribing: Bool = false
+    @State private var showingTranscription: Bool = false
+    @State private var transcriptionService = TranscriptionService(apiKey: "sk-pnyyswesfdoqkbqmxfpsiykxwglhupcqtpoldurutopocajv")
+    @State private var navigateToCard: MemoryCard? = nil // 新增：用于导航到匹配的卡片
+    @State private var showMatchAlert: Bool = false // 新增：显示匹配提示
+    @State private var matchedCards: [TextMatchingService.MatchResult] = [] // 新增：匹配到的卡片结果
+    
+    // 新增：寻物助手导航相关
+    @State private var navigateToWaterBottleFinder: Bool = false
+    @State private var waterBottleDestination = LocationData(
+        coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
+        name: "我的水杯",
+        description: "个人水杯位置"
+    )
     
     // 定义网格布局
     private let columns = [
@@ -94,6 +114,7 @@ struct MainListView: View {
                             }
                             .padding(.horizontal, 32)
                             .padding(.top, 12)
+                            .padding(.bottom, 80) // 为底部麦克风按钮留出空间
                         }
                     } else {
                         // 事件Tab内容 - 一行一个的列表布局
@@ -111,6 +132,7 @@ struct MainListView: View {
                             }
                             .padding(.horizontal, 20)
                             .padding(.top, 12)
+                            .padding(.bottom, 80) // 为底部麦克风按钮留出空间
                         }
                     }
                 }
@@ -163,6 +185,96 @@ struct MainListView: View {
                 } message: {
                     Text("确定要删除这张卡片吗？此操作无法撤销。")
                 }
+                
+                // 新增：底部中央麦克风按钮
+                VStack {
+                    Spacer()
+                    
+                    RecordButton(
+                        isRecording: $audioRecorder.isRecording,
+                        audioLevel: $audioRecorder.audioLevel,
+                        recordingDuration: $audioRecorder.recordingDuration,
+                        onTap: {
+                            handleMicButtonTap()
+                        }
+                    )
+                    .frame(width: 64, height: 64)
+                    .background(
+                        Circle()
+                            .fill(Color.white)
+                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    )
+                    .padding(.bottom, 20)
+                }
+                
+                // 新增：转录结果显示
+                if showingTranscription {
+                    VStack {
+                        TranscriptionView(
+                            text: transcriptionText,
+                            isTranscribing: isTranscribing,
+                            onClear: {
+                                transcriptionText = ""
+                                showingTranscription = false
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        
+                        Spacer()
+                    }
+                }
+            }
+            // 新增：导航链接
+            .background(
+                NavigationLink(
+                    destination: navigateToCard.map { card in
+                        CardDetailViewContainer(card: card, cardStore: cardStore)
+                    },
+                    isActive: Binding(
+                        get: { navigateToCard != nil },
+                        set: { if !$0 { navigateToCard = nil } }
+                    )
+                ) {
+                    EmptyView()
+                }
+            )
+            // 新增：寻物导航链接
+            .background(
+                NavigationLink(
+                    destination: IndoorNavigationView()
+                        .onAppear {
+                            // 设置目的地为"我的水杯"
+                            NavigationService.shared.setDestination(waterBottleDestination)
+                        },
+                    isActive: $navigateToWaterBottleFinder
+                ) {
+                    EmptyView()
+                }
+            )
+            // 新增：匹配结果提示
+            .alert("找到匹配的记忆卡片", isPresented: $showMatchAlert) {
+                // 如果只有一个匹配结果，直接提供打开按钮
+                if matchedCards.count == 1 {
+                    Button("打开") {
+                        navigateToCard = matchedCards.first?.card
+                    }
+                    Button("取消", role: .cancel) {}
+                } 
+                // 如果有多个匹配结果，提供查看选项
+                else if matchedCards.count > 1 {
+                    Button("查看所有匹配") {
+                        // 选择置信度最高的那个
+                        navigateToCard = matchedCards.first?.card
+                    }
+                    Button("取消", role: .cancel) {}
+                }
+            } message: {
+                if matchedCards.count == 1 {
+                    Text("您说的「\(matchedCards[0].card.title)」似乎与卡片匹配")
+                } else if matchedCards.count > 1 {
+                    Text("找到\(matchedCards.count)个匹配的记忆卡片")
+                }
             }
         }
         .task {
@@ -171,6 +283,93 @@ struct MainListView: View {
             } catch {
                 print("加载卡片失败：\(error)")
             }
+        }
+    }
+    
+    // 处理麦克风按钮点击
+    private func handleMicButtonTap() {
+        if audioRecorder.isRecording {
+            stopRecordingAndTranscribe()
+        } else {
+            startRecording()
+        }
+    }
+    
+    // 开始录音
+    private func startRecording() {
+        audioRecorder.startRecording()
+        isTranscribing = true
+        showingTranscription = true
+        transcriptionText = "正在录音..."
+    }
+    
+    // 停止录音并转写
+    private func stopRecordingAndTranscribe() {
+        guard let audioURL = audioRecorder.stopRecording() else {
+            transcriptionText = "录音失败"
+            isTranscribing = false
+            return
+        }
+        
+        transcriptionText = "正在转写..."
+        
+        Task {
+            do {
+                let text = try await transcriptionService.transcribe(audioFileURL: audioURL)
+                DispatchQueue.main.async {
+                    self.transcriptionText = text
+                    self.isTranscribing = false
+                    
+                    // 特殊指令检测：寻找水杯
+                    if self.checkWaterBottleCommand(text: text) {
+                        // 如果是寻找水杯的指令，发送通知切换到寻物助手标签
+                        NavigationService.shared.setDestination(waterBottleDestination)
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
+                        self.showingTranscription = false // 隐藏转写窗口
+                    } else {
+                        // 否则进行常规的卡片匹配
+                        self.checkTextMatch(text: text)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.transcriptionText = "转写失败：\(error.localizedDescription)"
+                    self.isTranscribing = false
+                }
+            }
+        }
+    }
+    
+    // 新增：检查是否是寻找水杯的指令
+    private func checkWaterBottleCommand(text: String) -> Bool {
+        // 归一化文本，去除空格和标点符号
+        let normalizedText = TextMatchingService.normalizeText(text)
+        
+        // 检查多种可能的表达方式
+        let waterBottleCommands = ["我的水杯在哪", "我的水杯在哪里", "我的水杯去哪了", "找水杯", "寻找水杯", "帮我找水杯"]
+        
+        for command in waterBottleCommands {
+            let normalizedCommand = TextMatchingService.normalizeText(command)
+            if normalizedText.contains(normalizedCommand) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // 检查文本匹配
+    private func checkTextMatch(text: String) {
+        // 使用TextMatchingService进行匹配
+        let results = TextMatchingService.findMatchingCardsWithConfidence(
+            transcribedText: text,
+            cards: cardStore.cards
+        )
+        
+        // 如果有匹配结果
+        if !results.isEmpty {
+            matchedCards = results
+            showMatchAlert = true
         }
     }
 }
