@@ -8,6 +8,17 @@
 import SwiftUI
 import CoreData
 
+struct TabSelectionKey: EnvironmentKey {
+    static var defaultValue: Binding<Int> = .constant(0)
+}
+
+extension EnvironmentValues {
+    var tabSelection: Binding<Int> {
+        get { self[TabSelectionKey.self] }
+        set { self[TabSelectionKey.self] = newValue }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedTab = 0
@@ -53,6 +64,7 @@ struct ContentView: View {
                     .tag(2)
             }
            .edgesIgnoringSafeArea(.bottom)
+           .environment(\.tabSelection, $selectedTab)
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
