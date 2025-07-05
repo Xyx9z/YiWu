@@ -25,6 +25,7 @@ struct CardDetailView: View {
     @State private var updatedCard: MemoryCard
     @Binding var tabSelection: Int
     @State private var destination: Destination?
+    @State private var showFullContent = false
     
     init(card: MemoryCard, cardStore: MemoryCardStore, tabSelection: Binding<Int>) {
         self.card = card
@@ -38,7 +39,7 @@ struct CardDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 顶部图片轮播
                 if !updatedCard.images.isEmpty {
-                    ZStack(alignment: .topTrailing) {
+                    ZStack(alignment: .bottomTrailing) {
                         TabView(selection: $selectedImageIndex) {
                             ForEach(updatedCard.images.indices, id: \.self) { idx in
                                 if let uiImage = UIImage(data: updatedCard.images[idx].imageData) {
@@ -52,212 +53,212 @@ struct CardDetailView: View {
                             }
                         }
                         .frame(height: 260)
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-                        // 页码指示器
-                        if updatedCard.images.count > 1 {
-                            Text("\(selectedImageIndex+1)/\(updatedCard.images.count)")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Color.black.opacity(0.35))
-                                .cornerRadius(12)
-                                .padding(.top, 12)
-                                .padding(.trailing, 16)
-                        }
+                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .automatic))
+                        .background(Color.black.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal)
+                        .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 3)
                     }
-//                    小圆点指示器
-                    if updatedCard.images.count > 1 {
-                        HStack(spacing: 7) {
-                            ForEach(updatedCard.images.indices, id: \.self) { idx in
-                                Circle()
-                                    .fill(idx == selectedImageIndex ? Color.gray.opacity(0.85) : Color.gray.opacity(0.3))
-                                    .frame(width: 8, height: 8)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
-                    }
+                    .padding(.top, 16)
                 }
                 
-                // 额外图片展示区域
-                if updatedCard.images.count > 1 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("图片")
-                            .font(.headline)
+                // 主要内容区域
+                VStack(alignment: .leading, spacing: 16) {
+                    // 标题和标签区域
+                    HStack(alignment: .center) {
+                        Text(updatedCard.title)
+                            .font(.system(size: 24, weight: .bold))
                             .foregroundColor(.primary)
-                            .padding(.bottom, 4)
+                            .lineLimit(2)
                         
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(1..<updatedCard.images.count, id: \.self) { idx in
-                                    if let uiImage = UIImage(data: updatedCard.images[idx].imageData) {
-                                        Button(action: {
-                                            selectedImageIndex = idx
-                                        }) {
-                                            Image(uiImage: uiImage)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 100, height: 100)
-                                                .cornerRadius(8)
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .stroke(idx == selectedImageIndex ? Color.blue : Color.clear, lineWidth: 3)
-                                                )
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 18)
-                        }
-                    }
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
-                }
-                
-                // 标题
-                Text(updatedCard.title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.primary)
-                    .padding(.top, 0)
-                    .padding(.horizontal, 18)
-                
-                // 类型标签
-                HStack {
-                    Text(updatedCard.type == .item ? "物品" : "事件")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(updatedCard.type == .item ? Color.blue : Color.orange)
-                        )
-                    Spacer()
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-                
-                // 详细内容
-                if !updatedCard.content.isEmpty {
-                    Text(updatedCard.content)
-                        .font(.system(size: 17))
-                        .foregroundColor(Color(.label))
-                        .lineSpacing(7)
-                        .padding(.all, 18)
-                        .padding(.horizontal, 14)
-                        .padding(.top, 12)
-                        .padding(.bottom, 18)
-                }
-                
-                // 音频播放区域
-                if updatedCard.audioData != nil {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("录音")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.bottom, 4)
+                        Spacer()
                         
-                        AudioPlayButton(audioData: updatedCard.audioData)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background(Color(.systemGray6).opacity(0.5))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 12)
-                }
-                
-                // 位置信息显示
-                if let dest = destination, dest.latitude != 0 || dest.longitude != 0 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("位置信息")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .padding(.bottom, 4)
-                        
-                        HStack {
-                            Image(systemName: "mappin.circle.fill")
-                                .foregroundColor(.red)
-                                .font(.system(size: 18))
-                            Text("经度: \(String(format: "%.6f", dest.longitude)), 纬度: \(String(format: "%.6f", dest.latitude))")
-                                .font(.system(size: 15))
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        if let notes = dest.notes, !notes.isEmpty {
-                            HStack(alignment: .top) {
-                                Image(systemName: "text.bubble")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 18))
-                                    .padding(.top, 2)
-                                Text(notes)
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(.top, 2)
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .background(Color(.systemGray6).opacity(0.5))
-                    .cornerRadius(10)
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 12)
-                }
-                
-                // 只有在物品类型时才显示导航按钮
-                if updatedCard.type == .item {
-                    Button(action: {
-                        if let dest = destination, dest.latitude != 0 && dest.longitude != 0 {
-                            alertMessage = "正在导航到：\(updatedCard.title)"
-                            
-                            // 设置目的地并跳转到IndoorNavigationView
-                            let locationData = LocationData(
-                                coordinate: CLLocationCoordinate2D(
-                                    latitude: dest.latitude,
-                                    longitude: dest.longitude
-                                ),
-                                name: dest.name ?? updatedCard.title,
-                                description: dest.notes
-                            )
-                            
-                            // 确保设置目的地
-                            NavigationService.shared.setDestination(locationData)
-                            print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
-                            
-                            // 直接切换到IndoorNavigation标签页
-                            tabSelection = 1
-                        } else {
-                            alertMessage = "该物品没有有效的位置信息"
-                            showAlert = true
-                        }
-                    }) {
-                        Text("导航到该物品")
-                            .font(.system(size: 14, weight: .bold))
+                        Text(updatedCard.type == .item ? "物品" : "事件")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 4)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color.green)
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                updatedCard.type == .item ? Color.blue : Color.orange,
+                                                updatedCard.type == .item ? Color.blue.opacity(0.7) : Color.orange.opacity(0.7)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
                             )
+                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 8)
-                    .alert(alertMessage, isPresented: $showAlert) {
-                        Button("确定", role: .cancel) {}
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                    
+                    // 详细内容
+                    if !updatedCard.content.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(showFullContent || updatedCard.content.count < 100 ? updatedCard.content : String(updatedCard.content.prefix(100) + "..."))
+                                .font(.system(size: 17))
+                                .foregroundColor(Color(.label))
+                                .lineSpacing(5)
+                            
+                            if updatedCard.content.count > 100 {
+                                Button(action: {
+                                    withAnimation(.easeInOut) {
+                                        showFullContent.toggle()
+                                    }
+                                }) {
+                                    Text(showFullContent ? "收起" : "查看更多")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.blue)
+                                }
+                                .padding(.top, 4)
+                            }
+                        }
+                        .padding(.horizontal)
                     }
+                    
+                    // 分隔线
+                    Divider()
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                    
+                    // 音频播放区域
+                    if updatedCard.audioData != nil {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "headphones")
+                                    .foregroundColor(.blue)
+                                    .font(.system(size: 20))
+                                Text("语音记录")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            AudioPlayButton(audioData: updatedCard.audioData)
+                                .padding(.vertical, 8)
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6).opacity(0.7))
+                        )
+                        .padding(.horizontal)
+                    }
+                    
+                    // 位置信息显示
+                    if let dest = destination, dest.latitude != 0 || dest.longitude != 0 {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 20))
+                                Text("位置信息")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            HStack {
+                                Image(systemName: "location.circle")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 16))
+                                    .frame(width: 24)
+                                Text("经度: \(String(format: "%.6f", dest.longitude)), 纬度: \(String(format: "%.6f", dest.latitude))")
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            if let notes = dest.notes, !notes.isEmpty {
+                                HStack(alignment: .top) {
+                                    Image(systemName: "text.bubble")
+                                        .foregroundColor(.blue)
+                                        .font(.system(size: 16))
+                                        .frame(width: 24)
+                                    Text(notes)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6).opacity(0.7))
+                        )
+                        .padding(.horizontal)
+                    }
+                    
+                    // 只有在物品类型时才显示导航按钮
+                    if updatedCard.type == .item {
+                        Button(action: {
+                            if let dest = destination, dest.latitude != 0 && dest.longitude != 0 {
+                                alertMessage = "正在导航到：\(updatedCard.title)"
+                                
+                                // 设置目的地并跳转到IndoorNavigationView
+                                let locationData = LocationData(
+                                    coordinate: CLLocationCoordinate2D(
+                                        latitude: dest.latitude,
+                                        longitude: dest.longitude
+                                    ),
+                                    name: dest.name ?? updatedCard.title,
+                                    description: dest.notes
+                                )
+                                
+                                // 确保设置目的地
+                                NavigationService.shared.setDestination(locationData)
+                                print("已设置导航目的地: \(locationData.name), 坐标: \(locationData.coordinate.latitude), \(locationData.coordinate.longitude)")
+                                
+                                // 直接切换到IndoorNavigation标签页
+                                tabSelection = 1
+                            } else {
+                                alertMessage = "该物品没有有效的位置信息"
+                                showAlert = true
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
+                                    .font(.system(size: 20))
+                                Text("导航到该物品")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: Color.green.opacity(0.3), radius: 5, x: 0, y: 2)
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        .alert(alertMessage, isPresented: $showAlert) {
+                            Button("确定", role: .cancel) {}
+                        }
+                    }
+                    
+                    // 时间戳
+                    HStack {
+                        Image(systemName: "calendar.badge.clock")
+                            .foregroundColor(.gray)
+                        Text("创建时间：\(updatedCard.timestamp, formatter: itemFormatter)")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                    .padding(.bottom, 24)
                 }
-                
-                // 时间戳
-                Text("创建时间：\(updatedCard.timestamp, formatter: itemFormatter)")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 18)
             }
         }
         .background(Color(.systemBackground))
@@ -267,7 +268,9 @@ struct CardDetailView: View {
                 Button(action: {
                     showingEditSheet = true
                 }) {
-                    Image(systemName: "pencil")
+                    Image(systemName: "pencil.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.blue)
                 }
             }
         }
