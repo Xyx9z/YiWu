@@ -71,4 +71,55 @@ struct TextMatchingService {
             return nil
         }.sorted { $0.confidence > $1.confidence } // 按置信度降序排序
     }
+    
+    // 新增：检查是否包含"寻务助手"指令
+    static func checkNavigationAssistantCommand(text: String) -> Bool {
+        let normalizedText = normalizeText(text)
+        
+        // 检查多种可能的表达方式
+        let commands = ["寻务助手", "打开寻务助手", "启动寻务助手", "进入寻务助手", "切换到寻务助手", "我要找东西"]
+        
+        for command in commands {
+            let normalizedCommand = normalizeText(command)
+            if normalizedText.contains(normalizedCommand) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // 新增：检查是否包含"物品识别"指令
+    static func checkObjectDetectionCommand(text: String) -> Bool {
+        let normalizedText = normalizeText(text)
+        
+        // 检查多种可能的表达方式
+        let commands = ["物品识别", "打开物品识别", "启动物品识别", "进入物品识别", "切换到物品识别", "识别物品", "扫描物品"]
+        
+        for command in commands {
+            let normalizedCommand = normalizeText(command)
+            if normalizedText.contains(normalizedCommand) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    // 新增：检查是否包含"编辑我的水杯"指令
+    static func checkEditWaterBottleCommand(text: String) -> Bool {
+        let normalizedText = normalizeText(text)
+        
+        // 检查多种可能的表达方式
+        let commands = ["编辑我的水杯", "修改我的水杯", "更新我的水杯", "修改水杯信息", "编辑水杯卡片"]
+        
+        for command in commands {
+            let normalizedCommand = normalizeText(command)
+            if normalizedText.contains(normalizedCommand) {
+                return true
+            }
+        }
+        
+        return false
+    }
 } 
