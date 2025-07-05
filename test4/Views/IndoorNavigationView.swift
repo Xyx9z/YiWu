@@ -11,6 +11,8 @@ struct IndoorNavigationView: View {
     @State private var selectedDestination: LocationData?
     @State private var showingFullMap = false
     @Environment(\.presentationMode) var presentationMode
+    // 添加动画状态
+    @State private var animateContent = false
     
     private let locationService = LocationService.shared
     private let navigationService = NavigationService.shared
@@ -20,6 +22,19 @@ struct IndoorNavigationView: View {
             // AR相机预览作为背景
             ARViewContainer()
                 .edgesIgnoringSafeArea(.all)
+            
+            // 半透明渐变覆盖层，增强视觉效果
+            if !isNavigating {
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.black.opacity(0.3),
+                        Color.black.opacity(0.1)
+                    ]),
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+                .edgesIgnoringSafeArea(.all)
+            }
             
             if isNavigating {
                 ZStack {
@@ -40,72 +55,154 @@ struct IndoorNavigationView: View {
                                     .resizable()
                                     .scaledToFill()
                                     .frame(width: 120, height: 120)
-                                    .cornerRadius(10)
+                                    .cornerRadius(16)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
+                                        RoundedRectangle(cornerRadius: 16)
                                             .stroke(Color.white, lineWidth: 2)
                                     )
-                                    .shadow(radius: 5)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+                                    .overlay(
+                                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                            .font(.system(size: 18, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(8)
+                                            .background(Color.black.opacity(0.6))
+                                            .clipShape(Circle())
+                                            .padding(8),
+                                        alignment: .topTrailing
+                                    )
                             }
                             .padding()
+                            .scaleEffect(animateContent ? 1 : 0.8)
+                            .opacity(animateContent ? 1 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: animateContent)
                         }
                     }
                 }
             } else {
                 // 主界面UI
-                VStack {
+                VStack(spacing: 0) {
+                    // 顶部返回按钮
+                    HStack {
+                        Button(action: {
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("返回")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 16)
+                            .background(Color.black.opacity(0.3))
+                            .cornerRadius(20)
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 8)
+                        
+                        Spacer()
+                    }
+                    
                     Spacer()
                     
-                    if let destination = selectedDestination,
-                       destination.name == "我的水杯" {
-                        Image("我的水杯")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 200)
-                            .cornerRadius(10)
-                            .padding()
-                            .onAppear {
-                                print("尝试加载图片：我的水杯")
+                    // 内容卡片
+                    VStack(spacing: 24) {
+                        // 标题
+                        Text("寻物助手")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.5), radius: 3, x: 0, y: 2)
+                        
+                        // 物品图片和信息
+                        if let destination = selectedDestination {
+                            VStack(spacing: 16) {
+                                if destination.name == "我的水杯" {
+                                    Image("我的水杯")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(height: 180)
+                                        .cornerRadius(16)
+                                        .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 5)
+                                        .padding(.horizontal)
+                                }
+                                
+                                VStack(spacing: 8) {
+                                    Text(destination.name)
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.white)
+                                    
+                                    if let description = destination.description, !description.isEmpty {
+                                        Text(description)
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.white.opacity(0.9))
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal)
+                                    }
+                                }
                             }
-                    }
-                    
-                    Text("当前选择的目的地: \(selectedDestination?.name ?? "无")")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .padding(.bottom, 5)
-                    
-                    VStack(spacing: 20) {
-                        Button(action: {
-                            if let destination = selectedDestination {
-                                startNavigation(to: destination)
-                            } else {
-                                showingDestinationPicker = true
-                            }
-                        }) {
-                            Text(selectedDestination == nil ? "选择所寻物品" : "开始导航")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(Color.blue)
-                                .cornerRadius(10)
+                            .padding(.horizontal)
+                            .offset(y: animateContent ? 0 : 20)
+                            .opacity(animateContent ? 1 : 0)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
                         }
                         
-                        if selectedDestination != nil {
+                        Spacer()
+                            .frame(height: 20)
+                        
+                        // 按钮区域
+                        VStack(spacing: 16) {
                             Button(action: {
-                                selectedDestination = nil
+                                if let destination = selectedDestination {
+                                    withAnimation {
+                                        startNavigation(to: destination)
+                                    }
+                                } else {
+                                    showingDestinationPicker = true
+                                }
                             }) {
-                                Text("重新选择")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 50)
-                                    .background(Color.gray)
-                                    .cornerRadius(10)
+                                HStack {
+                                    Image(systemName: selectedDestination == nil ? "map" : "location.fill")
+                                        .font(.system(size: 20))
+                                    Text(selectedDestination == nil ? "选择所寻物品" : "开始导航")
+                                        .font(.system(size: 18, weight: .bold))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 56)
+                                .background(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color(hex: "#4A6FFF"), Color(hex: "#77BDFF")]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(16)
+                                .shadow(color: Color(hex: "#4A6FFF").opacity(0.4), radius: 8, x: 0, y: 4)
+                            }
+                            
+                            if selectedDestination != nil {
+                                Button(action: {
+                                    withAnimation {
+                                        selectedDestination = nil
+                                    }
+                                }) {
+                                    Text("重新选择")
+                                        .font(.system(size: 16, weight: .medium))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 48)
+                                        .background(Color.white.opacity(0.25))
+                                        .cornerRadius(16)
+                                }
                             }
                         }
+                        .padding(.horizontal, 24)
+                        .offset(y: animateContent ? 0 : 30)
+                        .opacity(animateContent ? 1 : 0)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateContent)
                     }
-                    .padding(.horizontal, 20)
                     .padding(.bottom, 40)
                 }
             }
@@ -124,10 +221,20 @@ struct IndoorNavigationView: View {
             if let destination = navigationService.getDestination() {
                 self.selectedDestination = destination
                 print("已获取到设置的目的地: \(destination.name), 坐标: \(destination.coordinate.latitude), \(destination.coordinate.longitude)")
-                // 只设置目的地，不自动开始导航
             } else {
                 print("未获取到目的地，等待用户选择")
             }
+            
+            // 触发动画
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation {
+                    animateContent = true
+                }
+            }
+        }
+        .onDisappear {
+            // 重置动画状态
+            animateContent = false
         }
     }
     
@@ -140,22 +247,71 @@ struct IndoorNavigationView: View {
 
 struct FullMapView: View {
     @Binding var isPresented: Bool
+    @State private var animateMap = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Image("室内地图")
-                    .resizable()
-                    .scaledToFit()
-                    .cornerRadius(20)
-                    .padding()
-            }
-            .navigationTitle("室内地图")
-            .navigationBarItems(
-                trailing: Button("关闭") {
-                    isPresented = false
+        ZStack {
+            // 背景
+            Color.black.opacity(0.9)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 0) {
+                // 顶部标题栏
+                HStack {
+                    Text("室内地图")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        withAnimation {
+                            isPresented = false
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
                 }
-            )
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+                
+                // 地图内容
+                ZStack(alignment: .topTrailing) {
+                    Image("室内地图")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .cornerRadius(20)
+                        .padding(.horizontal, 16)
+                        .shadow(color: Color.white.opacity(0.2), radius: 15, x: 0, y: 0)
+                        .scaleEffect(animateMap ? 1 : 0.9)
+                        .opacity(animateMap ? 1 : 0)
+                    
+                    // 缩放提示
+                    Text("双指缩放查看详情")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(Color.black.opacity(0.6))
+                        .cornerRadius(15)
+                        .padding(.top, 12)
+                        .padding(.trailing, 24)
+                        .opacity(animateMap ? 1 : 0)
+                }
+                
+                Spacer()
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5)) {
+                animateMap = true
+            }
+        }
+        .onDisappear {
+            animateMap = false
         }
     }
 }
@@ -219,11 +375,12 @@ struct DestinationPickerView: View {
     @State private var newDestinationNotes = ""
     @State private var showingDeleteAlert = false
     @State private var destinationToDelete: Destination?
+    // 添加动画状态
+    @State private var animateItems = false
     
     // 定义网格布局
     private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.adaptive(minimum: 150, maximum: 180), spacing: 16)
     ]
     
     init(selectedDestination: Binding<LocationData?>) {
@@ -239,107 +396,153 @@ struct DestinationPickerView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
-                    .opacity(0.7)
                     .overlay(
-                        Color.black.opacity(0.1)
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.black.opacity(0.5),
+                                Color.black.opacity(0.2)
+                            ]),
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
                     )
-                
-                // 装饰性气泡
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 180, height: 180)
-                    .shadow(color: .white.opacity(0.3), radius: 10, x: 0, y: 0)
-                    .position(x: 50, y: 100)
-                
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 120, height: 120)
-                    .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 0)
-                    .position(x: UIScreen.main.bounds.width - 40, y: 200)
                 
                 // 主要内容
                 VStack(spacing: 0) {
-                    // 记忆卡片样式显示目的地
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(destinationStore.destinations) { destination in
-                                DestinationCard(destination: destination) {
-                                    // 点击选择目的地
-                                    let name = destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                                    selectedDestination = LocationData(
-                                        coordinate: CLLocationCoordinate2D(
-                                            latitude: destination.latitude,
-                                            longitude: destination.longitude
-                                        ),
-                                        name: name,
-                                        description: destination.notes
-                                    )
-                                    presentationMode.wrappedValue.dismiss()
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        destinationToDelete = destination
-                                        showingDeleteAlert = true
-                                    } label: {
-                                        Label("删除", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 32)
-                        .padding(.top, 12)
-                        .padding(.bottom, 80)
-                    }
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
+                    // 标题栏 - 使用ZStack将标题居中，按钮放在右侧
+                    ZStack {
+                        // 居中标题
                         Text("选择所寻物品")
                             .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color.white, Color(hex: "#E0ECFF")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .shadow(color: Color.black.opacity(0.35), radius: 3, x: 0, y: 2)
-                        Rectangle()
-                            .fill(Color.white.opacity(0.18))
-                            .frame(height: 1)
-                            .padding(.top, 4)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(.white)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showingAddForm = true
-                    }) {
-                        Image(systemName: "plus")
                             .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.3), radius: 3, x: 0, y: 2)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                        
+                        // 右侧添加按钮
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                showingAddForm = true
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
+                                    .shadow(color: Color.black.opacity(0.3), radius: 3, x: 0, y: 2)
+                            }
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+                    
+                    // 目的地卡片网格
+                    if destinationStore.destinations.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "map")
+                                .font(.system(size: 60))
+                                .foregroundColor(.white.opacity(0.8))
+                            
+                            Text("暂无保存的目的地")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(.white)
+                            
+                            Text("点击右上角 + 按钮添加新的目的地")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .opacity(animateItems ? 1 : 0)
+                        .offset(y: animateItems ? 0 : 20)
+                        .animation(.easeOut(duration: 0.4), value: animateItems)
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            LazyVGrid(columns: columns, spacing: 20) {
+                                ForEach(Array(destinationStore.destinations.enumerated()), id: \.element.id) { index, destination in
+                                    DestinationCard(destination: destination) {
+                                        // 点击选择目的地
+                                        let name = destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                        selectedDestination = LocationData(
+                                            coordinate: CLLocationCoordinate2D(
+                                                latitude: destination.latitude,
+                                                longitude: destination.longitude
+                                            ),
+                                            name: name,
+                                            description: destination.notes
+                                        )
+                                        presentationMode.wrappedValue.dismiss()
+                                    }
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            destinationToDelete = destination
+                                            showingDeleteAlert = true
+                                        } label: {
+                                            Label("删除", systemImage: "trash")
+                                        }
+                                    }
+                                    .opacity(animateItems ? 1 : 0)
+                                    .offset(y: animateItems ? 0 : 20)
+                                    .animation(
+                                        .spring(response: 0.5, dampingFraction: 0.8)
+                                        .delay(Double(index) * 0.05),
+                                        value: animateItems
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 30)
+                        }
+                    }
+                    
+                    // 底部取消按钮
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Text("取消")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(16)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                    }
+                    .opacity(animateItems ? 1 : 0)
+                    .offset(y: animateItems ? 0 : 20)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: animateItems)
                 }
             }
+            .navigationBarHidden(true)
             .sheet(isPresented: $showingAddForm) {
                 NavigationView {
-                    Form {
-                        TextField("名称", text: $newDestinationName)
-                        TextField("纬度", text: $newDestinationLatitude)
-                            .keyboardType(.decimalPad)
-                        TextField("经度", text: $newDestinationLongitude)
-                            .keyboardType(.decimalPad)
-                        TextField("备注", text: $newDestinationNotes)
+                    ZStack {
+                        Color(hex: "#F5F8FF")
+                            .ignoresSafeArea()
+                        
+                        Form {
+                            Section(header: Text("基本信息")) {
+                                TextField("名称", text: $newDestinationName)
+                                    .font(.system(size: 16))
+                                
+                                TextField("备注", text: $newDestinationNotes)
+                                    .font(.system(size: 16))
+                            }
+                            
+                            Section(header: Text("位置坐标")) {
+                                TextField("纬度", text: $newDestinationLatitude)
+                                    .keyboardType(.decimalPad)
+                                    .font(.system(size: 16))
+                                
+                                TextField("经度", text: $newDestinationLongitude)
+                                    .keyboardType(.decimalPad)
+                                    .font(.system(size: 16))
+                            }
+                        }
                     }
                     .navigationTitle("添加目的地")
+                    .navigationBarTitleDisplayMode(.inline)
                     .navigationBarItems(
                         leading: Button("取消") {
                             showingAddForm = false
@@ -347,6 +550,7 @@ struct DestinationPickerView: View {
                         trailing: Button("保存") {
                             saveNewDestination()
                         }
+                        .disabled(newDestinationName.isEmpty || newDestinationLatitude.isEmpty || newDestinationLongitude.isEmpty)
                     )
                 }
             }
@@ -360,7 +564,21 @@ struct DestinationPickerView: View {
             } message: {
                 Text("确定要删除这个目的地吗？此操作无法撤销。")
             }
+            .onAppear {
+                // 触发动画
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation {
+                        animateItems = true
+                    }
+                }
+            }
+            .onDisappear {
+                // 重置动画状态
+                animateItems = false
+            }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
     
     private func saveNewDestination() {
@@ -392,75 +610,85 @@ struct DestinationCard: View {
     let destination: Destination
     let onTap: () -> Void
     @State private var destinationImage: UIImage?
+    @State private var isPressed = false
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
                 // 图片区域
-                ZStack {
+                ZStack(alignment: .bottomTrailing) {
                     if let image = destinationImage {
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(height: 140)
+                            .frame(height: 120)
                             .clipped()
                     } else {
-                        Rectangle()
-                            .fill(Color.gray.opacity(0.2))
-                            .frame(height: 140)
-                            .overlay(
-                                Image(systemName: "mappin.and.ellipse")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(height: 50)
-                                    .foregroundColor(.blue.opacity(0.7))
+                        ZStack {
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color(hex: "#4A6FFF"), Color(hex: "#77BDFF")]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                    }
-                    
-                    // 位置坐标展示
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Text(String(format: "%.4f, %.4f", destination.latitude, destination.longitude))
-                                .font(.system(size: 10))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.black.opacity(0.6))
-                                .cornerRadius(4)
-                                .padding(8)
+                            .frame(height: 120)
+                            
+                            Image(systemName: "mappin.and.ellipse")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 40)
+                                .foregroundColor(.white.opacity(0.8))
                         }
                     }
+                    
+                    // 位置坐标展示 - 简化显示方式，只显示更短的坐标
+                    HStack {
+                        Spacer()
+                        Text(String(format: "%.2f, %.2f", destination.latitude, destination.longitude))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(6)
+                            .padding(6)
+                    }
                 }
-                .cornerRadius(8, corners: [.topLeft, .topRight])
+                .cornerRadius(12, corners: [.topLeft, .topRight])
                 
                 // 标题和内容区域
                 VStack(alignment: .leading, spacing: 4) {
                     Text(destination.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "未命名位置")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     if let notes = destination.notes, !notes.isEmpty {
                         Text(notes)
-                            .font(.system(size: 14))
+                            .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(1) // 减少行数以适应小屏幕
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(Color(.systemBackground))
+                .cornerRadius(12, corners: [.bottomLeft, .bottomRight])
             }
-            .frame(maxWidth: .infinity)
             .background(Color(.systemBackground))
             .cornerRadius(12)
-            .shadow(color: Color.black.opacity(0.15), radius: 5, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
+            .scaleEffect(isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
         }
         .buttonStyle(PlainButtonStyle())
         .onAppear {
             loadDestinationImage()
         }
+        .onLongPressGesture(minimumDuration: .infinity, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isPressed = pressing
+            }
+        }, perform: {})
     }
     
     private func loadDestinationImage() {
@@ -575,20 +803,75 @@ class ARNavigationViewController: UIViewController {
         instructionsLabel.textColor = .white
         instructionsLabel.textAlignment = .center
         instructionsLabel.numberOfLines = 0
-        instructionsLabel.layer.cornerRadius = 10
+        instructionsLabel.layer.cornerRadius = 16
         instructionsLabel.layer.masksToBounds = true
         instructionsLabel.font = .systemFont(ofSize: 18, weight: .medium)
         view.addSubview(instructionsLabel)
         updateNavigationInstructions()
         
-        // 添加关闭按钮
-        let closeButton = UIButton(frame: CGRect(x: 20, y: 40, width: 44, height: 44))
-        closeButton.setTitle("×", for: .normal)
-        closeButton.titleLabel?.font = .systemFont(ofSize: 24, weight: .bold)
-        closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-        closeButton.layer.cornerRadius = 22
-        closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
-        view.addSubview(closeButton)
+        // 找到地图图片的位置
+        let mapY: CGFloat = view.bounds.height - 140 // 地图在右下角，距离底部约140点
+        
+        // 添加左侧退出导航按钮（仿照开始导航按钮的样式，但尺寸更小）
+        let buttonWidth: CGFloat = 150 // 适中的宽度
+        let buttonHeight: CGFloat = 50 // 适中的高度
+        let buttonX: CGFloat = 20 // 靠左放置
+        let buttonY: CGFloat = mapY // 与地图图片垂直对齐
+        
+        // 创建按钮容器
+        let exitButtonContainer = UIView(frame: CGRect(x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight))
+        view.addSubview(exitButtonContainer)
+        
+        // 创建渐变背景
+        let gradientLayer = CAGradientLayer()
+        gradientLayer.frame = CGRect(x: 0, y: 0, width: buttonWidth, height: buttonHeight)
+        gradientLayer.colors = [
+            UIColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 1.0).cgColor,
+            UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 1.0).cgColor
+        ]
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        gradientLayer.cornerRadius = 16
+        exitButtonContainer.layer.insertSublayer(gradientLayer, at: 0)
+        
+        // 添加阴影
+        exitButtonContainer.layer.shadowColor = UIColor.black.cgColor
+        exitButtonContainer.layer.shadowOffset = CGSize(width: 0, height: 4)
+        exitButtonContainer.layer.shadowRadius = 8
+        exitButtonContainer.layer.shadowOpacity = 0.3
+        exitButtonContainer.layer.cornerRadius = 16
+        
+        // 创建按钮内容容器（用于居中内容）
+        let contentContainer = UIView(frame: CGRect(x: 0, y: 0, width: buttonWidth, height: buttonHeight))
+        exitButtonContainer.addSubview(contentContainer)
+        
+        // 创建图标
+        let iconSize: CGFloat = 20
+        let iconX: CGFloat = 15 // 靠左放置图标
+        let iconY = (buttonHeight - iconSize) / 2
+        
+        let iconImageView = UIImageView(frame: CGRect(x: iconX, y: iconY, width: iconSize, height: iconSize))
+        iconImageView.image = UIImage(systemName: "xmark.circle.fill")
+        iconImageView.contentMode = UIView.ContentMode.scaleAspectFit
+        iconImageView.tintColor = UIColor.white
+        contentContainer.addSubview(iconImageView)
+        
+        // 创建文字标签
+        let labelWidth: CGFloat = 100
+        let labelX = iconX + iconSize + 8
+        let labelY = (buttonHeight - 24) / 2
+        
+        let textLabel = UILabel(frame: CGRect(x: labelX, y: labelY, width: labelWidth, height: 24))
+        textLabel.text = "退出导航"
+        textLabel.textColor = UIColor.white
+        textLabel.font = UIFont.systemFont(ofSize: 16, weight: .bold)
+        contentContainer.addSubview(textLabel)
+        
+        // 添加点击事件 - 使用UIButton而不是UITapGestureRecognizer
+        let button = UIButton(type: .custom)
+        button.frame = exitButtonContainer.bounds
+        button.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
+        exitButtonContainer.addSubview(button)
         
         addNavigationNodes()
     }
@@ -999,7 +1282,24 @@ class ARNavigationViewController: UIViewController {
     }
     
     @objc private func closeButtonTapped() {
-        onClose?()
+        // 显示提示对话框
+        let alertController = UIAlertController(
+            title: "温馨提示",
+            message: "用完\(destination.name)记得放回原处哦",
+            preferredStyle: .alert
+        )
+        
+        let okAction = UIAlertAction(title: "好的", style: .default) { [weak self] _ in
+            // 关闭导航界面
+            self?.onClose?()
+        }
+        
+        alertController.addAction(okAction)
+        
+        // 在主线程上显示对话框
+        DispatchQueue.main.async { [weak self] in
+            self?.present(alertController, animated: true)
+        }
     }
     
     func updateDestination(_ newDestination: LocationData) {
