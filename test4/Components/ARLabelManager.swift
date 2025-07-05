@@ -17,32 +17,68 @@ class BoundingBoxView: UIView {
     }
     
     private func setup(label: String, confidence: Float) {
-        // 边框样式
-        self.layer.borderColor = UIColor.systemGreen.withAlphaComponent(0.85).cgColor
+        // 根据置信度调整颜色
+        let boxColor: UIColor
+        if confidence >= 0.8 {
+            boxColor = UIColor.systemGreen
+        } else if confidence >= 0.6 {
+            boxColor = UIColor.systemYellow
+        } else {
+            boxColor = UIColor.systemOrange
+        }
+        
+        // 改进的边框样式
+        self.layer.borderColor = boxColor.withAlphaComponent(0.85).cgColor
         self.layer.borderWidth = 3.5
-        self.layer.cornerRadius = 8.0
+        self.layer.cornerRadius = 10.0
         self.layer.masksToBounds = true
         self.backgroundColor = UIColor.clear
-        self.layer.shadowColor = UIColor.systemGreen.cgColor
-        self.layer.shadowOpacity = 0.25
-        self.layer.shadowOffset = CGSize(width: 0, height: 2)
-        self.layer.shadowRadius = 6
+        
+        // 添加半透明背景使边框更加明显
+        let backgroundView = UIView(frame: self.bounds)
+        backgroundView.backgroundColor = boxColor.withAlphaComponent(0.15)
+        backgroundView.layer.cornerRadius = 10.0
+        self.insertSubview(backgroundView, at: 0)
+        
+        // 增强边框视觉效果
+        self.layer.shadowColor = boxColor.cgColor
+        self.layer.shadowOpacity = 0.4
+        self.layer.shadowOffset = CGSize(width: 0, height: 3)
+        self.layer.shadowRadius = 8
         self.isUserInteractionEnabled = true
+        
         // 关键：不裁剪子视图
         self.clipsToBounds = false
-        // label样式
-        titleLabel.text = "\(label)  \(String(format: "%.0f%%", confidence * 100))"
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 15)
-        titleLabel.textColor = UIColor.systemGreen
-        titleLabel.backgroundColor = UIColor.white.withAlphaComponent(0.85)
-        titleLabel.layer.cornerRadius = 6
+        
+        // 改进的label样式
+        // 仅在高置信度时显示百分比
+        let displayText = confidence >= 0.65 ? 
+            "\(label)  \(String(format: "%.0f%%", confidence * 100))" : 
+            label
+        
+        titleLabel.text = displayText
+        titleLabel.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+        titleLabel.textColor = boxColor
+        
+        // 给标签添加渐变背景
+        titleLabel.backgroundColor = UIColor.white.withAlphaComponent(0.9)
+        titleLabel.layer.cornerRadius = 8
         titleLabel.layer.masksToBounds = true
         titleLabel.textAlignment = .center
         titleLabel.sizeToFit()
-        let labelHeight: CGFloat = 28
-        let labelWidth = max(titleLabel.frame.width + 16, 60)
+        
+        // 调整标签尺寸，使其更加明显
+        let labelHeight: CGFloat = 32
+        let labelWidth = max(titleLabel.frame.width + 20, 70)
+        
         // 微调y坐标，确保label在边框正上方且不会被裁剪
-        titleLabel.frame = CGRect(x: (self.bounds.width-labelWidth)/2, y: 0, width: labelWidth, height: labelHeight)
+        titleLabel.frame = CGRect(x: (self.bounds.width-labelWidth)/2, y: -8, width: labelWidth, height: labelHeight)
+        
+        // 添加阴影效果使标签更加醒目
+        titleLabel.layer.shadowColor = UIColor.black.cgColor
+        titleLabel.layer.shadowOpacity = 0.3
+        titleLabel.layer.shadowOffset = CGSize(width: 0, height: 2)
+        titleLabel.layer.shadowRadius = 4
         // 支持点击
         titleLabel.isUserInteractionEnabled = true
         let tap = UITapGestureRecognizer(target: self, action: #selector(labelTapped))
@@ -99,6 +135,10 @@ class ARLabelManager {
         detectedObjectBoxes.removeAll()
     }
     
+    // 保存上一次检测结果，用于平滑过渡
+    private var lastBoundingBoxes: [String: CGRect] = [:]
+    private var smoothingFactor: CGFloat = 0.7 // 平滑因子，越高平滑效果越强
+    
     func addBoundingBox(for objectID: String, at boundingBox: CGRect, label: String, confidence: Float, baseRect: CGRect? = nil) {
         let viewRect: CGRect
         if let baseRect = baseRect {
@@ -108,14 +148,64 @@ class ARLabelManager {
         } else {
             viewRect = parentView.bounds
         }
+        
+        // 获取当前界面方向
+        let isPortrait: Bool
+        if #available(iOS 15.0, *) {
+            let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+            let orientation = windowScene?.interfaceOrientation ?? .portrait
+            isPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        } else {
+            let orientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
+            isPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        }
+        
         // 修正坐标映射逻辑
-        let boxFrame = CGRect(
+        var boxFrame = CGRect(
             x: viewRect.origin.x + boundingBox.origin.x * viewRect.width,
-            y: viewRect.origin.y + (1 - boundingBox.origin.y - boundingBox.height) * viewRect.height,
+            y: viewRect.origin.y + boundingBox.origin.y * viewRect.height,
             width: boundingBox.width * viewRect.width,
             height: boundingBox.height * viewRect.height
         )
-        detectedObjectBoxes[objectID]?.removeFromSuperview()
+        
+        // 应用平滑处理，减少边界框抖动
+        if let lastBox = lastBoundingBoxes[objectID] {
+            // 使用插值平滑过渡
+            boxFrame = CGRect(
+                x: lastBox.origin.x * smoothingFactor + boxFrame.origin.x * (1 - smoothingFactor),
+                y: lastBox.origin.y * smoothingFactor + boxFrame.origin.y * (1 - smoothingFactor),
+                width: lastBox.width * smoothingFactor + boxFrame.width * (1 - smoothingFactor),
+                height: lastBox.height * smoothingFactor + boxFrame.height * (1 - smoothingFactor)
+            )
+        }
+        
+        // 保存当前边界框位置，用于下次平滑
+        lastBoundingBoxes[objectID] = boxFrame
+        
+        // 检查是否已存在该物体的边界框
+        if let existingBox = detectedObjectBoxes[objectID] {
+            // 平滑过渡动画更新边界框位置
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                existingBox.frame = boxFrame
+            } completion: { _ in
+                // 更新标签内容，但保持位置平滑
+                if let boxView = self.detectedObjectBoxes[objectID] as? BoundingBoxView {
+                    // 只在必要时重新创建视图
+                    if abs(existingBox.frame.width - boxFrame.width) > 30 ||
+                       abs(existingBox.frame.height - boxFrame.height) > 30 {
+                        existingBox.removeFromSuperview()
+                        self.createNewBoxView(objectID: objectID, boxFrame: boxFrame, label: label, confidence: confidence)
+                    }
+                }
+            }
+        } else {
+            // 创建新的边界框视图
+            createNewBoxView(objectID: objectID, boxFrame: boxFrame, label: label, confidence: confidence)
+        }
+    }
+    
+    private func createNewBoxView(objectID: String, boxFrame: CGRect, label: String, confidence: Float) {
         let boxView = BoundingBoxView(frame: boxFrame, label: label, confidence: confidence)
         boxView.objectID = objectID
         boxView.onLabelTapped = { [weak self] id in
@@ -125,9 +215,13 @@ class ARLabelManager {
             self?.onLabelLongPressed?(id)
         }
         boxView.alpha = 0
-        UIView.animate(withDuration: 0.25) {
+        boxView.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+        
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0, options: []) {
             boxView.alpha = 1
+            boxView.transform = .identity
         }
+        
         parentView.addSubview(boxView)
         detectedObjectBoxes[objectID] = boxView
     }
