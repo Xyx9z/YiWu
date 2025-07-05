@@ -21,6 +21,10 @@ struct MainListView: View {
     @State private var showMatchAlert: Bool = false // 新增：显示匹配提示
     @State private var matchedCards: [TextMatchingService.MatchResult] = [] // 新增：匹配到的卡片结果
     
+    // 新增：水杯卡片编辑相关
+    @State private var showingEditWaterBottleCard: Bool = false
+    @State private var waterBottleCard: MemoryCard? = nil
+    
     // 新增：寻物助手导航相关
     @State private var navigateToWaterBottleFinder: Bool = false
     @State private var waterBottleDestination = LocationData(
@@ -170,6 +174,11 @@ struct MainListView: View {
                 }
                 .sheet(isPresented: $showingAddCard) {
                     CardEditView(cardStore: cardStore, initialCardType: selectedTab == 0 ? .item : .event)
+                }
+                .sheet(isPresented: $showingEditWaterBottleCard) {
+                    if let card = waterBottleCard {
+                        CardEditView(cardStore: cardStore, card: card)
+                    }
                 }
                 .alert("删除卡片", isPresented: $showingDeleteAlert) {
                     Button("取消", role: .cancel) {}
@@ -326,7 +335,26 @@ struct MainListView: View {
                         NavigationService.shared.setDestination(waterBottleDestination)
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
                         self.showingTranscription = false // 隐藏转写窗口
-                    } else {
+                    } 
+                    // 新增：检测"编辑我的水杯"指令
+                    else if TextMatchingService.checkEditWaterBottleCommand(text: text) {
+                        // 查找"我的水杯"卡片并打开编辑页面
+                        self.findAndEditWaterBottleCard()
+                        self.showingTranscription = false // 隐藏转写窗口
+                    }
+                    // 新增：检测"寻务助手"指令
+                    else if TextMatchingService.checkNavigationAssistantCommand(text: text) {
+                        // 如果是寻务助手指令，发送通知切换到寻务助手标签页
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
+                        self.showingTranscription = false // 隐藏转写窗口
+                    } 
+                    // 新增：检测"物品识别"指令
+                    else if TextMatchingService.checkObjectDetectionCommand(text: text) {
+                        // 如果是物品识别指令，发送通知切换到物品识别标签页
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToObjectDetectionTab"), object: nil)
+                        self.showingTranscription = false // 隐藏转写窗口
+                    }
+                    else {
                         // 否则进行常规的卡片匹配
                         self.checkTextMatch(text: text)
                     }
@@ -356,6 +384,20 @@ struct MainListView: View {
         }
         
         return false
+    }
+    
+    // 新增：查找并编辑水杯卡片
+    private func findAndEditWaterBottleCard() {
+        // 查找标题为"我的水杯"的卡片
+        if let waterBottleCard = cardStore.cards.first(where: { $0.title == "我的水杯" }) {
+            // 保存找到的卡片
+            self.waterBottleCard = waterBottleCard
+            // 显示编辑页面
+            self.showingEditWaterBottleCard = true
+        } else {
+            // 未找到水杯卡片，显示提示
+            self.transcriptionText = "未找到";"我的水杯";"卡片"
+        }
     }
     
     // 检查文本匹配
