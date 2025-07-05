@@ -2,6 +2,148 @@ import SwiftUI
 import PhotosUI
 import CoreData
 import CoreLocation
+import UIKit
+
+// 添加一个全局点击手势识别器到UIWindow
+extension UIWindow {
+    static func addTapGestureToHideKeyboard() {
+        guard let window = UIApplication.shared.windows.first else { return }
+        
+        // 移除之前可能存在的手势识别器
+        for recognizer in window.gestureRecognizers ?? [] {
+            window.removeGestureRecognizer(recognizer)
+        }
+        
+        // 添加新的手势识别器
+        let tapGesture = UITapGestureRecognizer(target: window, action: #selector(UIWindow.endEditing))
+        tapGesture.cancelsTouchesInView = false
+        tapGesture.delegate = TapGestureDelegate.shared
+        window.addGestureRecognizer(tapGesture)
+        
+        print("全局点击手势已添加到UIWindow")
+    }
+}
+
+// 手势识别器代理，确保不干扰其他控件的点击事件
+class TapGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+    static let shared = TapGestureDelegate()
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // 如果点击的是UIControl（按钮等），不处理该点击事件
+        if touch.view is UIControl {
+            return false
+        }
+        return true
+    }
+    
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+}
+
+// 自定义TextField和TextView，点击空白区域自动隐藏键盘
+class CustomUITextField: UITextField {
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        self.resignFirstResponder()
+        super.touchesBegan(touches, with: event)
+    }
+}
+
+class CustomUITextView: UITextView {
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if !self.isFirstResponder {
+            self.superview?.touchesBegan(touches, with: event)
+        }
+        super.touchesBegan(touches, with: event)
+    }
+}
+
+// 自定义TextField，支持点击空白区域隐藏键盘
+struct CustomTextField: UIViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var keyboardType: UIKeyboardType = .default
+    var font: UIFont = .systemFont(ofSize: 16)
+    
+    func makeUIView(context: Context) -> CustomUITextField {
+        let textField = CustomUITextField(frame: .zero)
+        textField.placeholder = placeholder
+        textField.keyboardType = keyboardType
+        textField.font = font
+        textField.delegate = context.coordinator
+        textField.backgroundColor = .clear
+        return textField
+    }
+    
+    func updateUIView(_ uiView: CustomUITextField, context: Context) {
+        uiView.text = text
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: CustomTextField
+        
+        init(_ parent: CustomTextField) {
+            self.parent = parent
+        }
+        
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            parent.text = textField.text ?? ""
+        }
+        
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return true
+        }
+    }
+}
+
+// 自定义TextEditor，支持点击空白区域隐藏键盘
+struct CustomTextEditor: UIViewRepresentable {
+    @Binding var text: String
+    var font: UIFont = .systemFont(ofSize: 16)
+    
+    func makeUIView(context: Context) -> CustomUITextView {
+        let textView = CustomUITextView()
+        textView.font = font
+        textView.delegate = context.coordinator
+        textView.backgroundColor = .clear
+        textView.isScrollEnabled = true
+        return textView
+    }
+    
+    func updateUIView(_ uiView: CustomUITextView, context: Context) {
+        if uiView.text != text {
+            uiView.text = text
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UITextViewDelegate {
+        var parent: CustomTextEditor
+        
+        init(_ parent: CustomTextEditor) {
+            self.parent = parent
+        }
+        
+        func textViewDidChange(_ textView: UITextView) {
+            parent.text = textView.text
+        }
+    }
+}
+
+// 简单直接的键盘隐藏扩展
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
 
 // 辅助函数，用于判断设备类型
 func isCompactDevice() -> Bool {
@@ -51,19 +193,26 @@ struct MainImageView: View {
                 }
             }
             .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 3)
+            .padding(.horizontal)
             
             // 编辑按钮
             PhotosPicker(selection: .init(get: { nil }, set: onSelectNewImage),
                         matching: .images) {
-                Image(systemName: "pencil.circle.fill")
-                    .font(.title)
+                Image(systemName: "camera.circle.fill")
+                    .font(.system(size: 40))
                     .foregroundColor(.white)
-                    .padding(8)
-                    .background(Color.black.opacity(0.6))
-                    .clipShape(Circle())
-                    .padding(8)
+                    .background(
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 40, height: 40)
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    .padding([.bottom, .trailing], 16)
             }
         }
+        .padding(.top, 12)
     }
 }
 
@@ -76,60 +225,83 @@ struct AdditionalImagesView: View {
     @Environment(\.managedObjectContext) private var viewContext
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("附加图片")
-                    .font(.title3.bold())
-                    .foregroundColor(.black)
+                Label("附加图片", systemImage: "photo.stack.fill")
+                    .font(.headline)
+                    .foregroundColor(.primary)
                 
                 Spacer()
+                
+                PhotosPicker(selection: .init(get: { [] }, set: onSelectImages),
+                           maxSelectionCount: 4,
+                           matching: .images) {
+                    Label("添加", systemImage: "plus")
+                        .font(.footnote)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .stroke(Color.blue, lineWidth: 1)
+                        )
+                }
             }
             .padding(.horizontal)
-            .padding(.top, 8)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    PhotosPicker(selection: .init(get: { [] }, set: onSelectImages),
-                               maxSelectionCount: 4,
-                               matching: .images) {
-                        VStack {
-                            Image(systemName: "plus.circle.fill")
-                                .resizable()
-                                .frame(width: 30, height: 30)
-                            Text("添加图片")
-                                .font(.caption)
-                        }
-                                                                .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
-                                               height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
-                                        .background(Color.gray.opacity(0.1))
-                                        .cornerRadius(8)
-                    }
-                    
                     ForEach(images.dropFirst()) { imageData in
                         if let uiImage = UIImage(data: imageData.imageData) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
-                                       height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    Button(action: { onDeleteImage(imageData) }) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
+                                           height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                
+                                Button(action: { onDeleteImage(imageData) }) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 22, height: 22)
+                                            .shadow(color: Color.black.opacity(0.2), radius: 2, x: 0, y: 1)
+                                        
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundColor(.red)
-                                            .padding(4)
+                                            .font(.system(size: 20))
                                     }
-                                    .offset(x: 6, y: -6),
-                                    alignment: .topTrailing
-                                )
+                                }
+                                .offset(x: 6, y: -6)
+                            }
                         }
+                    }
+                    
+                    if images.count <= 1 {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
+                                   height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
+                            .overlay(
+                                Text("无附加图片")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            )
                     }
                 }
                 .padding(.horizontal)
             }
             .frame(height: isCompactDevice() ? 100 : min(UIScreen.main.bounds.height * 0.18, 120))
-            .padding(.bottom, isCompactDevice() ? 4 : 8)
         }
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+        )
+        .padding(.horizontal)
     }
 }
 
@@ -143,64 +315,86 @@ struct LocationEditView: View {
     @State private var existingDestination: Destination?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("位置信息")
-                    .font(.title3.bold())
-                    .foregroundColor(.black)
+                Label("位置信息", systemImage: "mappin.and.ellipse")
+                    .font(.headline)
+                    .foregroundColor(.primary)
                 
                 Spacer()
             }
             .padding(.horizontal)
-            .padding(.top, 8)
             
             VStack(spacing: 12) {
                 // 纬度输入
                 HStack {
                     Text("纬度:")
-                        .font(.body)
+                        .font(.callout)
                         .foregroundColor(.gray)
                         .frame(width: 60, alignment: .leading)
                     
-                    TextField("纬度坐标", text: $latitude)
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    CustomTextField(
+                        text: $latitude,
+                        placeholder: "纬度坐标",
+                        keyboardType: .decimalPad,
+                        font: .systemFont(ofSize: 16)
+                    )
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .padding(.horizontal)
                 
                 // 经度输入
                 HStack {
                     Text("经度:")
-                        .font(.body)
+                        .font(.callout)
                         .foregroundColor(.gray)
                         .frame(width: 60, alignment: .leading)
                     
-                    TextField("经度坐标", text: $longitude)
-                        .keyboardType(.decimalPad)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    CustomTextField(
+                        text: $longitude,
+                        placeholder: "经度坐标",
+                        keyboardType: .decimalPad,
+                        font: .systemFont(ofSize: 16)
+                    )
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .padding(.horizontal)
                 
                 // 备注输入
-                HStack {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("备注:")
-                        .font(.body)
+                        .font(.callout)
                         .foregroundColor(.gray)
-                        .frame(width: 60, alignment: .leading)
-                        .alignmentGuide(.leading) { d in d[.leading] }
                     
-                    TextEditor(text: $notes)
-                        .frame(height: isCompactDevice() ? 60 : min(UIScreen.main.bounds.height * 0.12, 80))
-                        .padding(4)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
+                    CustomTextEditor(
+                        text: $notes,
+                        font: .systemFont(ofSize: 16)
+                    )
+                    .frame(height: isCompactDevice() ? 60 : min(UIScreen.main.bounds.height * 0.12, 80))
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 }
                 .padding(.horizontal)
             }
-            .padding(.bottom, 8)
         }
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+        )
+        .padding(.horizontal)
         .onAppear {
             loadExistingDestination()
         }
@@ -232,26 +426,27 @@ struct ReminderSettingsView: View {
     @Binding var reminderMessage: String
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("提醒设置")
-                    .font(.title3.bold())
-                    .foregroundColor(.black)
+                Label("提醒设置", systemImage: "bell.fill")
+                    .font(.headline)
+                    .foregroundColor(.primary)
                 
                 Spacer()
                 
                 Toggle("", isOn: $reminderEnabled)
                     .labelsHidden()
+                    .toggleStyle(SwitchToggleStyle(tint: .blue))
+                    .scaleEffect(0.85)
             }
             .padding(.horizontal)
-            .padding(.top, 8)
             
             if reminderEnabled {
                 VStack(spacing: 12) {
                     // 提醒频率选择
                     HStack {
                         Text("频率:")
-                            .font(.body)
+                            .font(.callout)
                             .foregroundColor(.gray)
                             .frame(width: 60, alignment: .leading)
                         
@@ -262,9 +457,10 @@ struct ReminderSettingsView: View {
                         }
                         .pickerStyle(MenuPickerStyle())
                         .frame(maxWidth: .infinity)
+                        .padding(8)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                         )
                     }
                     .padding(.horizontal)
@@ -272,7 +468,7 @@ struct ReminderSettingsView: View {
                     // 提醒时间选择
                     HStack {
                         Text("时间:")
-                            .font(.body)
+                            .font(.callout)
                             .foregroundColor(.gray)
                             .frame(width: 60, alignment: .leading)
                         
@@ -284,37 +480,46 @@ struct ReminderSettingsView: View {
                     .padding(.horizontal)
                     
                     // 提醒内容输入
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("提醒内容:")
-                            .font(.body)
+                            .font(.callout)
                             .foregroundColor(.gray)
                         
-                        TextEditor(text: $reminderMessage)
+                        ZStack(alignment: .topLeading) {
+                            CustomTextEditor(
+                                text: $reminderMessage,
+                                font: .systemFont(ofSize: 16)
+                            )
                             .frame(height: isCompactDevice() ? 60 : min(UIScreen.main.bounds.height * 0.12, 80))
-                            .padding(4)
-                            .overlay(
+                            .padding(8)
+                            .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
-                            .overlay(
-                                Group {
-                                    if reminderMessage.isEmpty {
-                                        Text("输入提醒内容，例如\"上好喊妈妈\"")
-                                            .foregroundColor(Color.gray.opacity(0.7))
-                                            .padding(.leading, 8)
-                                            .padding(.top, 8)
-                                            .allowsHitTesting(false)
-                                    }
-                                }
-                            )
+                            
+                            if reminderMessage.isEmpty {
+                                Text("输入提醒内容，例如\"上好喊妈妈\"")
+                                    .foregroundColor(Color.gray.opacity(0.7))
+                                    .font(.system(size: 16))
+                                    .padding(16)
+                                    .allowsHitTesting(false)
+                            }
+                        }
                     }
                     .padding(.horizontal)
                 }
-                .padding(.bottom, 8)
+                .padding(.vertical, 8)
                 .transition(.opacity)
                 .animation(.easeInOut, value: reminderEnabled)
             }
         }
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+        )
+        .padding(.horizontal)
     }
 }
 
@@ -362,100 +567,200 @@ struct CardEditView: View {
     
     // 针对iPhone 14 Pro的优化尺寸
     private var contentSpacing: CGFloat {
-        isCompactDevice() ? min(UIScreen.main.bounds.height * 0.02, 15) : min(UIScreen.main.bounds.height * 0.025, 20)
+        isCompactDevice() ? min(UIScreen.main.bounds.height * 0.02, 12) : min(UIScreen.main.bounds.height * 0.025, 16)
     }
     
     var body: some View {
         NavigationView {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: contentSpacing) {
-                    // 主图片区域
-                    MainImageView(
-                        image: card.images.first.flatMap { UIImage(data: $0.imageData) },
-                        onTapImage: { isShowingFullScreenImage = true },
-                        onSelectNewImage: { item in mainImageItem = item }
-                    )
-                    
-                    VStack(spacing: isCompactDevice() ? 12 : min(UIScreen.main.bounds.height * 0.02, 16)) {
-                        // 卡片类型选择器
-                        Picker("卡片类型", selection: $card.type) {
-                            Text("物品").tag(CardType.item)
-                            Text("事件").tag(CardType.event)
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .padding(.horizontal)
-                        .onChange(of: card.type) { newType in
-                            // 如果切换到物品类型，禁用提醒
-                            if newType == .item {
-                                reminderEnabled = false
+            ZStack {
+                // 背景层
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                // 内容层
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: contentSpacing) {
+                        // 主图片区域
+                        MainImageView(
+                            image: card.images.first.flatMap { UIImage(data: $0.imageData) },
+                            onTapImage: { isShowingFullScreenImage = true },
+                            onSelectNewImage: { item in mainImageItem = item }
+                        )
+                        
+                        VStack(spacing: contentSpacing) {
+                            // 卡片类型选择器
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("卡片类型")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                Picker("卡片类型", selection: $card.type) {
+                                    Text("物品").tag(CardType.item)
+                                    Text("事件").tag(CardType.event)
+                                }
+                                .pickerStyle(SegmentedPickerStyle())
+                                .padding(.horizontal)
+                                .onChange(of: card.type) { newType in
+                                    if newType == .item {
+                                        reminderEnabled = false
+                                    }
+                                }
                             }
-                        }
-                        
-                        // 标题输入框
-                        TextField("输入卡片标题", text: $card.title)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(.system(size: isCompactDevice() ? 24 : min(UIScreen.main.bounds.width * 0.06, 28)))
-                            .frame(height: isCompactDevice() ? 50 : min(UIScreen.main.bounds.height * 0.07, 60))
-                            .padding(.horizontal)
-                        
-                        // 内容编辑区
-                        TextEditor(text: $card.content)
-                            .frame(height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.height * 0.15, 100))
-                            .padding(4)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
                             )
                             .padding(.horizontal)
-                        
-                        // 附加图片区域
-                        AdditionalImagesView(
-                            images: card.images,
-                            onSelectImages: { items in selectedItems = items },
-                            onDeleteImage: deleteImage,
-                            cardTitle: card.title
-                        )
-                        
-                        // 音频录制区域
-                        AudioRecordButton(audioData: $audioData, audioFileName: $audioFileName)
-                        
-                        // 位置信息编辑区域
-                        LocationEditView(
-                            latitude: $latitude,
-                            longitude: $longitude,
-                            notes: $locationNotes,
-                            cardTitle: card.title
-                        )
-                        
-                        // 事件类型才显示提醒设置
-                        if card.type == .event {
-                            ReminderSettingsView(
-                                reminderEnabled: $reminderEnabled,
-                                reminderTime: $reminderTime,
-                                reminderFrequency: $reminderFrequency,
-                                reminderMessage: $reminderMessage
+                            .padding(.top, 8)
+                            
+                            // 标题输入区域
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("标题")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(.systemBackground))
+                                        .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+                                    
+                                    CustomTextField(
+                                        text: $card.title, 
+                                        placeholder: "输入卡片标题",
+                                        font: .systemFont(ofSize: isCompactDevice() ? 20 : 22, weight: .medium)
+                                    )
+                                    .padding()
+                                }
+                                .padding(.horizontal)
+                            }
+                            
+                            // 内容编辑区
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("内容")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                // 内容编辑区域
+                                VStack {
+                                    ZStack(alignment: .topLeading) {
+                                        // 背景和框架
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Color(.systemBackground))
+                                            .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+                                        
+                                        // 内容编辑器 - 使用自定义TextEditor
+                                        CustomTextEditor(
+                                            text: $card.content,
+                                            font: .systemFont(ofSize: 16)
+                                        )
+                                        .padding(12)
+                                        
+                                        // 占位符文本
+                                        if card.content.isEmpty {
+                                            Text("添加描述内容...")
+                                                .foregroundColor(Color.gray.opacity(0.7))
+                                                .font(.body)
+                                                .padding(18)
+                                                .allowsHitTesting(false)
+                                        }
+                                    }
+                                }
+                                .frame(height: isCompactDevice() ? 100 : min(UIScreen.main.bounds.height * 0.15, 120))
+                                .padding(.horizontal)
+                            }
+                            
+                            // 附加图片区域
+                            AdditionalImagesView(
+                                images: card.images,
+                                onSelectImages: { items in selectedItems = items },
+                                onDeleteImage: deleteImage,
+                                cardTitle: card.title
                             )
+                            
+                            // 音频录制区域
+                            VStack(alignment: .leading, spacing: 8) {
+                                Label("语音记录", systemImage: "mic.fill")
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                AudioRecordButton(audioData: $audioData, audioFileName: $audioFileName)
+                                    .padding(.horizontal)
+                            }
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
+                            )
+                            .padding(.horizontal)
+                            
+                            // 位置信息编辑区域
+                            LocationEditView(
+                                latitude: $latitude,
+                                longitude: $longitude,
+                                notes: $locationNotes,
+                                cardTitle: card.title
+                            )
+                            
+                            // 事件类型才显示提醒设置
+                            if card.type == .event {
+                                ReminderSettingsView(
+                                    reminderEnabled: $reminderEnabled,
+                                    reminderTime: $reminderTime,
+                                    reminderFrequency: $reminderFrequency,
+                                    reminderMessage: $reminderMessage
+                                )
+                            }
+                            
+                            // 底部间距
+                            Spacer()
+                                .frame(height: 30)
                         }
                     }
-                    .padding(.top, 8)
+                    .padding(.bottom, keyboardHeight > 0 ? keyboardHeight - 50 : 0)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
+                    Button(action: {
                         dismiss()
+                    }) {
+                        Text("取消")
+                            .foregroundColor(.blue)
                     }
                 }
                 ToolbarItem(placement: .principal) {
                     Text("记忆卡片")
                         .font(.headline)
                 }
+                
+                // 保存按钮
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("保存") {
-                        saveCard()
+                    HStack(spacing: 16) {
+                        // 键盘隐藏按钮
+                        Button(action: {
+                            hideKeyboard()
+                        }) {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .foregroundColor(.gray)
+                        }
+                        
+                        // 保存按钮
+                        Button(action: {
+                            hideKeyboard()
+                            if !card.title.isEmpty {
+                                saveCard()
+                            }
+                        }) {
+                            Text("保存")
+                                .fontWeight(.medium)
+                                .foregroundColor(card.title.isEmpty ? .gray : .blue)
+                        }
+                        .disabled(card.title.isEmpty)
                     }
-                    .disabled(card.title.isEmpty)
                 }
             }
             .onChange(of: selectedItems) { newItems in
@@ -493,50 +798,21 @@ struct CardEditView: View {
             .overlay(
                 Group {
                     if isLoading {
-                        ProgressView("正在处理图片...")
-                            .padding()
-                            .background(Color.white.opacity(0.8))
-                            .cornerRadius(8)
+                        LoadingOverlay()
                     }
                 }
             )
             .fullScreenCover(isPresented: $isShowingFullScreenImage) {
                 if let firstImage = card.images.first,
                    let uiImage = UIImage(data: firstImage.imageData) {
-                    ZStack {
-                        Color.black.ignoresSafeArea()
-                        
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
-                        VStack {
-                            HStack {
-                                Spacer()
-                                Button(action: {
-                                    isShowingFullScreenImage = false
-                                }) {
-                                    Image(systemName: "xmark")
-                                        .font(.title2.bold())
-                                        .foregroundColor(.white)
-                                        .padding(8)
-                                        .background(
-                                            Circle()
-                                                .fill(Color.red)
-                                                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                                        )
-                                }
-                                .padding()
-                            }
-                            Spacer()
-                        }
-                    }
-                    .statusBar(hidden: true)
+                    FullScreenImageView(image: uiImage, isPresented: $isShowingFullScreenImage)
                 }
             }
             .onAppear {
                 loadExistingDestination()
+                // 添加全局点击手势
+                UIWindow.addTapGestureToHideKeyboard()
+                
                 // 添加键盘通知观察器
                 NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { notification in
                     if let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
@@ -555,8 +831,7 @@ struct CardEditView: View {
             .onChange(of: card.title) { newTitle in
                 loadExistingDestination()
             }
-            // 添加额外的底部padding以防止内容被键盘遮挡
-            .padding(.bottom, keyboardHeight > 0 ? keyboardHeight - 50 : 0)
+
         }
     }
     
@@ -684,4 +959,69 @@ struct CardEditView: View {
 
 #Preview {
     CardEditView(cardStore: MemoryCardStore())
-} 
+}
+
+
+
+// 加载指示器组件
+struct LoadingOverlay: View {
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                Text("处理图片中...")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.black.opacity(0.7))
+            )
+        }
+    }
+}
+
+// 全屏图像查看组件
+struct FullScreenImageView: View {
+    let image: UIImage
+    @Binding var isPresented: Bool
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        isPresented = false
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.title2.bold())
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(
+                                Circle()
+                                    .fill(Color.black.opacity(0.7))
+                            )
+                    }
+                    .padding()
+                }
+                Spacer()
+            }
+        }
+        .statusBar(hidden: true)
+    }
+}
+
