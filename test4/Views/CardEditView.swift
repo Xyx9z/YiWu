@@ -323,6 +323,10 @@ struct CardEditView: View {
     @State private var reminderFrequency: ReminderFrequency = .none
     @State private var reminderMessage: String = ""
     
+    // 音频相关状态
+    @State private var audioData: Data?
+    @State private var audioFileName: String?
+    
     init(cardStore: MemoryCardStore, card: MemoryCard? = nil, initialCardType: CardType = .item) {
         self.cardStore = cardStore
         if let existingCard = card {
@@ -331,6 +335,8 @@ struct CardEditView: View {
             _reminderTime = State(initialValue: existingCard.reminderTime ?? Date())
             _reminderFrequency = State(initialValue: existingCard.reminderFrequency)
             _reminderMessage = State(initialValue: existingCard.reminderMessage)
+            _audioData = State(initialValue: existingCard.audioData)
+            _audioFileName = State(initialValue: existingCard.audioFileName)
         } else {
             _card = State(initialValue: MemoryCard(type: initialCardType))
         }
@@ -386,6 +392,9 @@ struct CardEditView: View {
                             onDeleteImage: deleteImage,
                             cardTitle: card.title
                         )
+                        
+                        // 音频录制区域
+                        AudioRecordButton(audioData: $audioData, audioFileName: $audioFileName)
                         
                         // 位置信息编辑区域
                         LocationEditView(
@@ -555,6 +564,10 @@ struct CardEditView: View {
             card.reminderFrequency = .none
             card.reminderMessage = ""
         }
+        
+        // 保存音频数据
+        card.audioData = audioData
+        card.audioFileName = audioFileName
         
         if let index = cardStore.cards.firstIndex(where: { $0.id == card.id }) {
             cardStore.cards[index] = card
