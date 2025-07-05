@@ -80,6 +80,42 @@ struct CardDetailView: View {
                         .padding(.bottom, 4)
                     }
                 }
+                
+                // 额外图片展示区域
+                if updatedCard.images.count > 1 {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("图片")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 4)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(1..<updatedCard.images.count, id: \.self) { idx in
+                                    if let uiImage = UIImage(data: updatedCard.images[idx].imageData) {
+                                        Button(action: {
+                                            selectedImageIndex = idx
+                                        }) {
+                                            Image(uiImage: uiImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 100, height: 100)
+                                                .cornerRadius(8)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .stroke(idx == selectedImageIndex ? Color.blue : Color.clear, lineWidth: 3)
+                                                )
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 18)
+                        }
+                    }
+                    .padding(.top, 12)
+                    .padding(.bottom, 16)
+                }
+                
                 // 标题
                 Text(updatedCard.title)
                     .font(.system(size: 22, weight: .bold))
