@@ -182,88 +182,97 @@ struct TranscriptionView: View {
     let isTranscribing: Bool
     var onClear: () -> Void
     
-    // 添加计时器相关状态
-    @State private var autoCloseTimer: Timer? = nil
-    @State private var remainingTime: Int = 1
+    // 动画状态
+    @State private var animateText = false
     
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            // 文字内容
-            Text(text)
-                .foregroundColor(.black)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(maxHeight: UIScreen.main.bounds.height / 5) // 改为屏幕高度的1/5
-                .multilineTextAlignment(.leading)
+        VStack(spacing: 0) {
+            // 顶部指示条
+            Rectangle()
+                .fill(isTranscribing ? Color.blue : Color.green)
+                .frame(height: 4)
+                .animation(.easeInOut, value: isTranscribing)
             
-            // 清空按钮 - 在识别过程中也显示
-            Button(action: onClear) {
-                Image(systemName: "xmark.circle.fill")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-                    .foregroundColor(.black)
-                    .padding([.top, .trailing], 12)
+            ZStack(alignment: .topTrailing) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // 状态指示
+                    HStack(spacing: 8) {
+                        // 录音/转写状态图标
+                        Image(systemName: isTranscribing ? "waveform" : "text.bubble")
+                            .foregroundColor(isTranscribing ? .blue : .green)
+                            .font(.system(size: 16, weight: .semibold))
+                            .opacity(animateText && isTranscribing ? 0.5 : 1.0)
+                            .animation(
+                                Animation.easeInOut(duration: 0.6)
+                                    .repeatForever(autoreverses: true),
+                                value: animateText
+                            )
+                        
+                        // 状态文本
+                        Text(isTranscribing ? "正在识别..." : "识别结果")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(isTranscribing ? .blue : .green)
+                    }
+                    .padding(.top, 12)
+                    .padding(.horizontal, 16)
+                    
+                    // 分隔线
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(height: 1)
+                        .padding(.horizontal, 8)
+                    
+                    // 文字内容
+                    ScrollView {
+                        Text(text)
+                            .font(.system(size: 16))
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 16)
+                    }
+                    .frame(maxHeight: UIScreen.main.bounds.height / 5)
+                }
+                
+                // 清空按钮
+                Button(action: onClear) {
+                    Image(systemName: "xmark.circle.fill")
+                        .resizable()
+                        .frame(width: 22, height: 22)
+                        .foregroundColor(.gray)
+                        .background(Circle().fill(Color.white))
+                        .padding([.top, .trailing], 12)
+                }
             }
+            .background(
+                RoundedRectangle(cornerRadius: 0)
+                    .fill(Color.white)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, y: 2)
+            )
         }
-        .background(Color.white.opacity(0.8))
-        .animation(.easeInOut, value: !text.isEmpty)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
+        .padding(.horizontal)
+        .animation(.easeInOut(duration: 0.3), value: !text.isEmpty)
         .onAppear {
-            startAutoCloseTimer()
-        }
-        .onDisappear {
-            stopAutoCloseTimer()
-        }
-        .onChange(of: text) { _ in
-            // 当文本变化时重新启动定时器
-            restartAutoCloseTimer()
+            animateText = isTranscribing
+            
+            // 如果不在转写状态，则设置2.5秒后自动关闭
+            if !isTranscribing && !text.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    onClear()
+                }
+            }
         }
         .onChange(of: isTranscribing) { newValue in
-            // 当正在转写时，不启动自动关闭
-            if newValue {
-                stopAutoCloseTimer()
-            } else {
-                // 转写完成后启动自动关闭
-                startAutoCloseTimer()
+            animateText = newValue
+            
+            // 当转写完成且有文本时，设置2.5秒后自动关闭
+            if !newValue && !text.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    onClear()
+                }
             }
-        }
-    }
-    
-    // 启动自动关闭计时器
-    private func startAutoCloseTimer() {
-        // 如果正在转写，不启动定时器
-        if isTranscribing {
-            return
-        }
-        
-        // 停止现有计时器
-        stopAutoCloseTimer()
-        
-        // 重置剩余时间
-        remainingTime = 1
-        
-        // 创建新计时器
-        autoCloseTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            if remainingTime > 0 {
-                remainingTime -= 1
-            } else {
-                // 时间到，执行关闭操作
-                onClear()
-                stopAutoCloseTimer()
-            }
-        }
-    }
-    
-    // 停止自动关闭计时器
-    private func stopAutoCloseTimer() {
-        autoCloseTimer?.invalidate()
-        autoCloseTimer = nil
-    }
-    
-    // 重新启动计时器
-    private func restartAutoCloseTimer() {
-        if !isTranscribing {
-            stopAutoCloseTimer()
-            startAutoCloseTimer()
         }
     }
 }
