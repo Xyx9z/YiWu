@@ -39,8 +39,8 @@ struct MainListView: View {
     
     // 定义网格布局
     private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
     ]
     
     // 渐变色定义
@@ -100,7 +100,7 @@ struct MainListView: View {
                     TabView(selection: $selectedTab) {
                         // 物品Tab内容
                         ScrollView {
-                            LazyVGrid(columns: columns, spacing: 20) {
+                            LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(cardStore.cards.filter { $0.type == .item }) { card in
                                     NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
                                         CardGridItem(card: card)
@@ -118,7 +118,7 @@ struct MainListView: View {
                                     })
                                 }
                             }
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 30)
                             .padding(.top, 16)
                             .padding(.bottom, 100) // 为底部麦克风按钮留出空间
                         }
@@ -126,7 +126,7 @@ struct MainListView: View {
                         
                         // 事件Tab内容
                         ScrollView {
-                            LazyVStack(spacing: 16) {
+                            LazyVStack(spacing: 12) {
                                 ForEach(cardStore.cards.filter { $0.type == .event }) { card in
                                     NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
                                         EventCardListItem(card: card)
@@ -144,7 +144,7 @@ struct MainListView: View {
                                     })
                                 }
                             }
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, 30)
                             .padding(.top, 16)
                             .padding(.bottom, 100) // 为底部麦克风按钮留出空间
                         }
@@ -536,11 +536,12 @@ struct CardGridItem: View {
                 .padding(.top, 4)
                 .padding(.bottom, 10)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 16)
         }
         .background(Color(.systemBackground))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        .padding(.horizontal, 2)
     }
     
     // 格式化日期
@@ -647,12 +648,13 @@ struct EventCardListItem: View {
                 .foregroundColor(.gray.opacity(0.6))
                 .padding(.trailing, 8)
         }
-        .padding(12)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
         )
+        .padding(.horizontal, 2)
         .frame(maxWidth: .infinity)
     }
     
