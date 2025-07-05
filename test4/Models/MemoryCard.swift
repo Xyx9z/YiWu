@@ -38,6 +38,10 @@ struct MemoryCard: Identifiable, Codable {
     var reminderMessage: String = ""
     var lastNotified: Date? = nil  // 记录上次通知时间，用于避免重复通知
     
+    // 音频相关属性
+    var audioData: Data? = nil
+    var audioFileName: String? = nil
+    
     init(id: UUID = UUID(), title: String = "", content: String = "", images: [ImageData] = [], timestamp: Date = Date(), type: CardType = .item) {
         self.id = id
         self.title = title
