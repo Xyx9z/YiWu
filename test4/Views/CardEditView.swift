@@ -3,6 +3,17 @@ import PhotosUI
 import CoreData
 import CoreLocation
 
+// 辅助函数，用于判断设备类型
+func isCompactDevice() -> Bool {
+    // iPhone 14 Pro及类似尺寸设备的特殊处理
+    return UIScreen.main.bounds.height < 900 && UIScreen.main.bounds.width < 500
+}
+
+// 辅助函数，计算主图片高度
+func mainImageHeight() -> CGFloat {
+    return isCompactDevice() ? min(UIScreen.main.bounds.height * 0.3, 240) : min(UIScreen.main.bounds.height * 0.35, 280)
+}
+
 // 主图片视图组件
 struct MainImageView: View {
     let image: UIImage?
@@ -13,18 +24,20 @@ struct MainImageView: View {
         ZStack(alignment: .bottomTrailing) {
             Group {
                 if let image = image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: UIScreen.main.bounds.height * 0.4)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onTapImage)
+                    GeometryReader { geo in
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: mainImageHeight())
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .onTapGesture(perform: onTapImage)
+                    }
+                    .frame(height: mainImageHeight())
                 } else {
                     Rectangle()
                         .fill(Color.gray.opacity(0.1))
-                        .frame(height: UIScreen.main.bounds.height * 0.4)
+                        .frame(height: mainImageHeight())
                         .overlay(
                             VStack(spacing: 12) {
                                 Image(systemName: "photo.fill")
@@ -86,9 +99,10 @@ struct AdditionalImagesView: View {
                             Text("添加图片")
                                 .font(.caption)
                         }
-                        .frame(width: 100, height: 100)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+                                                                .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
+                                               height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
+                                        .background(Color.gray.opacity(0.1))
+                                        .cornerRadius(8)
                     }
                     
                     ForEach(images.dropFirst()) { imageData in
@@ -96,7 +110,8 @@ struct AdditionalImagesView: View {
                             Image(uiImage: uiImage)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: 100, height: 100)
+                                .frame(width: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100), 
+                                       height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.width * 0.25, 100))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .overlay(
                                     Button(action: { onDeleteImage(imageData) }) {
@@ -112,8 +127,8 @@ struct AdditionalImagesView: View {
                 }
                 .padding(.horizontal)
             }
-            .frame(height: 120)
-            .padding(.bottom, 8)
+            .frame(height: isCompactDevice() ? 100 : min(UIScreen.main.bounds.height * 0.18, 120))
+            .padding(.bottom, isCompactDevice() ? 4 : 8)
         }
     }
 }
@@ -175,7 +190,7 @@ struct LocationEditView: View {
                         .alignmentGuide(.leading) { d in d[.leading] }
                     
                     TextEditor(text: $notes)
-                        .frame(height: 80)
+                        .frame(height: isCompactDevice() ? 60 : min(UIScreen.main.bounds.height * 0.12, 80))
                         .padding(4)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -275,7 +290,7 @@ struct ReminderSettingsView: View {
                             .foregroundColor(.gray)
                         
                         TextEditor(text: $reminderMessage)
-                            .frame(height: 80)
+                            .frame(height: isCompactDevice() ? 60 : min(UIScreen.main.bounds.height * 0.12, 80))
                             .padding(4)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
@@ -306,6 +321,8 @@ struct ReminderSettingsView: View {
 struct CardEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @ObservedObject var cardStore: MemoryCardStore
     @State private var card: MemoryCard
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -316,6 +333,7 @@ struct CardEditView: View {
     @State private var latitude: String = ""
     @State private var longitude: String = ""
     @State private var locationNotes: String = ""
+    @State private var keyboardHeight: CGFloat = 0
     
     // 提醒相关状态
     @State private var reminderEnabled: Bool = false
@@ -342,10 +360,15 @@ struct CardEditView: View {
         }
     }
     
+    // 针对iPhone 14 Pro的优化尺寸
+    private var contentSpacing: CGFloat {
+        isCompactDevice() ? min(UIScreen.main.bounds.height * 0.02, 15) : min(UIScreen.main.bounds.height * 0.025, 20)
+    }
+    
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: contentSpacing) {
                     // 主图片区域
                     MainImageView(
                         image: card.images.first.flatMap { UIImage(data: $0.imageData) },
@@ -353,7 +376,7 @@ struct CardEditView: View {
                         onSelectNewImage: { item in mainImageItem = item }
                     )
                     
-                    VStack(spacing: 16) {
+                    VStack(spacing: isCompactDevice() ? 12 : min(UIScreen.main.bounds.height * 0.02, 16)) {
                         // 卡片类型选择器
                         Picker("卡片类型", selection: $card.type) {
                             Text("物品").tag(CardType.item)
@@ -371,13 +394,13 @@ struct CardEditView: View {
                         // 标题输入框
                         TextField("输入卡片标题", text: $card.title)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(.system(size: 32))
-                            .frame(height: 60)
+                            .font(.system(size: isCompactDevice() ? 24 : min(UIScreen.main.bounds.width * 0.06, 28)))
+                            .frame(height: isCompactDevice() ? 50 : min(UIScreen.main.bounds.height * 0.07, 60))
                             .padding(.horizontal)
                         
                         // 内容编辑区
                         TextEditor(text: $card.content)
-                            .frame(height: 100)
+                            .frame(height: isCompactDevice() ? 80 : min(UIScreen.main.bounds.height * 0.15, 100))
                             .padding(4)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
@@ -514,10 +537,26 @@ struct CardEditView: View {
             }
             .onAppear {
                 loadExistingDestination()
+                // 添加键盘通知观察器
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main) { notification in
+                    if let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
+                        keyboardHeight = keyboardSize.height
+                    }
+                }
+                NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main) { _ in
+                    keyboardHeight = 0
+                }
+            }
+            .onDisappear {
+                // 移除键盘观察器
+                NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+                NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
             }
             .onChange(of: card.title) { newTitle in
                 loadExistingDestination()
             }
+            // 添加额外的底部padding以防止内容被键盘遮挡
+            .padding(.bottom, keyboardHeight > 0 ? keyboardHeight - 50 : 0)
         }
     }
     
@@ -544,6 +583,10 @@ struct CardEditView: View {
     }
     
     private func saveCard() {
+        // 清理观察者
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIResponder.keyboardWillHideNotification, object: nil)
+        
         // 检查是否是编辑现有卡片
         let isExistingCard = cardStore.cards.contains(where: { $0.id == card.id })
         
