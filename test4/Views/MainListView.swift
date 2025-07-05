@@ -8,24 +8,24 @@ struct MainListView: View {
     @State private var selectedCard: MemoryCard?
     @State private var showingDeleteAlert = false
     @State private var cardToDelete: MemoryCard?
-    // 新增：顶部Tab切换
+    // Tab切换
     @State private var selectedTab: Int = 0 // 0-物品，1-事件
     
-    // 新增：语音识别相关状态
+    // 语音识别相关状态
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var transcriptionText: String = ""
     @State private var isTranscribing: Bool = false
     @State private var showingTranscription: Bool = false
     @State private var transcriptionService = TranscriptionService(apiKey: "sk-pnyyswesfdoqkbqmxfpsiykxwglhupcqtpoldurutopocajv")
-    @State private var navigateToCard: MemoryCard? = nil // 新增：用于导航到匹配的卡片
-    @State private var showMatchAlert: Bool = false // 新增：显示匹配提示
-    @State private var matchedCards: [TextMatchingService.MatchResult] = [] // 新增：匹配到的卡片结果
+    @State private var navigateToCard: MemoryCard? = nil
+    @State private var showMatchAlert: Bool = false
+    @State private var matchedCards: [TextMatchingService.MatchResult] = []
     
-    // 新增：水杯卡片编辑相关
+    // 水杯卡片编辑相关
     @State private var showingEditWaterBottleCard: Bool = false
     @State private var waterBottleCard: MemoryCard? = nil
     
-    // 新增：寻物助手导航相关
+    // 寻物助手导航相关
     @State private var navigateToWaterBottleFinder: Bool = false
     @State private var waterBottleDestination = LocationData(
         coordinate: CLLocationCoordinate2D(latitude: 0, longitude: 0),
@@ -33,100 +33,84 @@ struct MainListView: View {
         description: "个人水杯位置"
     )
     
+    // 动画状态
+    @State private var animateBackground = false
+    @State private var animateCards = false
+    
     // 定义网格布局
     private let columns = [
-        GridItem(.flexible(), spacing: 12), // 减小列间距
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
     ]
+    
+    // 渐变色定义
+    private let gradientStart = Color.white
+    private let gradientEnd = Color.white.opacity(0.9)
+    // 蓝色渐变定义（用于Tab切换）
+    private let blueGradientStart = Color(hex: "#4A6FFF")
+    private let blueGradientEnd = Color(hex: "#77BDFF")
     
     var body: some View {
         NavigationView {
             ZStack {
-                // 背景图片
+                // 背景
                 Image("SunsetBackground")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
-                    .opacity(0.7) // 设置透明度为70%
-                    .overlay(
-                        Color.black.opacity(0.1) // 添加轻微的暗色遮罩使内容更易读
-                    )
                 
-                // 装饰性气泡
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 180, height: 180)
-                    .shadow(color: .white.opacity(0.3), radius: 10, x: 0, y: 0)
-                    .position(x: 50, y: 100)
-                
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 120, height: 120)
-                    .shadow(color: .white.opacity(0.3), radius: 8, x: 0, y: 0)
-                    .position(x: UIScreen.main.bounds.width - 40, y: 200)
-                
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 150, height: 150)
-                    .shadow(color: .white.opacity(0.3), radius: 9, x: 0, y: 0)
-                    .position(x: UIScreen.main.bounds.width - 80, y: UIScreen.main.bounds.height - 100)
-                
-                Circle()
-                    .fill(Color(hex: "#EDFFC9"))
-                    .opacity(0.7)
-                    .frame(width: 100, height: 100)
-                    .shadow(color: .white.opacity(0.3), radius: 7, x: 0, y: 0)
-                    .position(x: 60, y: UIScreen.main.bounds.height - 200)
+                // 已移除装饰性元素，使用SunsetBackground图片作为背景
                 
                 // 主要内容
                 VStack(spacing: 0) {
-                    // 新版：顶部Tab切换，左对齐，白色字体
-                    HStack(spacing: 28) {
-                        Button(action: { selectedTab = 0 }) {
-                            Text("物品")
-                                .font(.system(size: 16, weight: selectedTab == 0 ? .bold : .regular))
-                                .foregroundColor(.white)
-                        }
-                        Button(action: { selectedTab = 1 }) {
-                            Text("事件")
-                                .font(.system(size: 16, weight: selectedTab == 1 ? .bold : .regular))
-                                .foregroundColor(.white)
+                    // 顶部Tab切换
+                    HStack(spacing: 0) {
+                        ForEach(["物品", "事件"], id: \.self) { tab in
+                            let isSelected = (tab == "物品" && selectedTab == 0) || (tab == "事件" && selectedTab == 1)
+                            
+                            Button(action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedTab = tab == "物品" ? 0 : 1
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    Text(tab)
+                                        .font(.system(size: 17, weight: isSelected ? .bold : .medium))
+                                        .foregroundColor(isSelected ? blueGradientStart : .gray)
+                                    
+                                    // 下划线指示器
+                                    Rectangle()
+                                        .fill(isSelected ? blueGradientStart : Color.clear)
+                                        .frame(height: 3)
+                                        .cornerRadius(1.5)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                            }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 8)
-                    .padding(.leading, 40)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 0)
+                            .fill(Color.white.opacity(0.7))
+                            .shadow(color: Color.black.opacity(0.05), radius: 5, y: 3)
+                    )
                     
                     // Tab内容区
-                    if selectedTab == 0 {
+                    TabView(selection: $selectedTab) {
                         // 物品Tab内容
                         ScrollView {
-                            LazyVGrid(columns: columns, spacing: 16) {
+                            LazyVGrid(columns: columns, spacing: 20) {
                                 ForEach(cardStore.cards.filter { $0.type == .item }) { card in
                                     NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
                                         CardGridItem(card: card)
-                                    }
-                                    .simultaneousGesture(LongPressGesture().onEnded { _ in
-                                        cardToDelete = card
-                                        showingDeleteAlert = true
-                                    })
-                                }
-                            }
-                            .padding(.horizontal, 32)
-                            .padding(.top, 12)
-                            .padding(.bottom, 80) // 为底部麦克风按钮留出空间
-                        }
-                    } else {
-                        // 事件Tab内容 - 一行一个的列表布局
-                        ScrollView {
-                            LazyVStack(spacing: 16) {
-                                ForEach(cardStore.cards.filter { $0.type == .event }) { card in
-                                    NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
-                                        EventCardListItem(card: card)
+                                            .opacity(animateCards ? 1 : 0)
+                                            .offset(y: animateCards ? 0 : 20)
+                                            .animation(
+                                                .spring(response: 0.5, dampingFraction: 0.8)
+                                                .delay(Double(cardStore.cards.firstIndex(where: { $0.id == card.id }) ?? 0) * 0.05),
+                                                value: animateCards
+                                            )
                                     }
                                     .simultaneousGesture(LongPressGesture().onEnded { _ in
                                         cardToDelete = card
@@ -135,40 +119,68 @@ struct MainListView: View {
                                 }
                             }
                             .padding(.horizontal, 20)
-                            .padding(.top, 12)
-                            .padding(.bottom, 80) // 为底部麦克风按钮留出空间
+                            .padding(.top, 16)
+                            .padding(.bottom, 100) // 为底部麦克风按钮留出空间
                         }
+                        .tag(0)
+                        
+                        // 事件Tab内容
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(cardStore.cards.filter { $0.type == .event }) { card in
+                                    NavigationLink(destination: CardDetailViewContainer(card: card, cardStore: cardStore)) {
+                                        EventCardListItem(card: card)
+                                            .opacity(animateCards ? 1 : 0)
+                                            .offset(y: animateCards ? 0 : 20)
+                                            .animation(
+                                                .spring(response: 0.5, dampingFraction: 0.8)
+                                                .delay(Double(cardStore.cards.firstIndex(where: { $0.id == card.id }) ?? 0) * 0.05),
+                                                value: animateCards
+                                            )
+                                    }
+                                    .simultaneousGesture(LongPressGesture().onEnded { _ in
+                                        cardToDelete = card
+                                        showingDeleteAlert = true
+                                    })
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                            .padding(.bottom, 100) // 为底部麦克风按钮留出空间
+                        }
+                        .tag(1)
                     }
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
                 }
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    // 居中美观标题
+                    // 居中标题
                     ToolbarItem(placement: .principal) {
-                        VStack(spacing: 0) {
-                            Text("我的记忆卡片")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [Color.white, Color(hex: "#E0ECFF")],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
+                        Text("记忆卡片")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [gradientStart, gradientEnd]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
                                 )
-                                .shadow(color: Color.black.opacity(0.35), radius: 3, x: 0, y: 2)
-                            // 新增：标题下方分割线
-                            Rectangle()
-                                .fill(Color.white.opacity(0.18))
-                                .frame(height: 1)
-                                .padding(.top, 4)
-                        }
+                            )
                     }
-                    // 右侧+按钮
+                    
+                    // 右侧添加按钮
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: {
                             showingAddCard = true
                         }) {
-                            Image(systemName: "plus")
-                                .foregroundColor(.white)
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [gradientStart, gradientEnd]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
                         }
                     }
                 }
@@ -195,7 +207,7 @@ struct MainListView: View {
                     Text("确定要删除这张卡片吗？此操作无法撤销。")
                 }
                 
-                // 新增：底部中央麦克风按钮
+                // 底部麦克风按钮
                 VStack {
                     Spacer()
                     
@@ -207,16 +219,11 @@ struct MainListView: View {
                             handleMicButtonTap()
                         }
                     )
-                    .frame(width: 64, height: 64)
-                    .background(
-                        Circle()
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                    )
                     .padding(.bottom, 20)
+                    .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 5)
                 }
                 
-                // 新增：转录结果显示
+                // 转录结果显示
                 if showingTranscription {
                     VStack {
                         TranscriptionView(
@@ -234,7 +241,7 @@ struct MainListView: View {
                     }
                 }
             }
-            // 新增：导航链接
+            // 导航链接
             .background(
                 NavigationLink(
                     destination: navigateToCard.map { card in
@@ -248,7 +255,7 @@ struct MainListView: View {
                     EmptyView()
                 }
             )
-            // 新增：寻物导航链接
+            // 寻物导航链接
             .background(
                 NavigationLink(
                     destination: IndoorNavigationView()
@@ -261,7 +268,7 @@ struct MainListView: View {
                     EmptyView()
                 }
             )
-            // 新增：匹配结果提示
+            // 匹配结果提示
             .alert("找到匹配的记忆卡片", isPresented: $showMatchAlert) {
                 // 如果只有一个匹配结果，直接提供打开按钮
                 if matchedCards.count == 1 {
@@ -286,11 +293,24 @@ struct MainListView: View {
                 }
             }
         }
-        .task {
-            do {
-                try await cardStore.load()
-            } catch {
-                print("加载卡片失败：\(error)")
+        .onAppear {
+            // 启动动画
+            withAnimation {
+                animateBackground = true
+                
+                // 延迟一点启动卡片动画
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    animateCards = true
+                }
+            }
+            
+            // 加载数据
+            Task {
+                do {
+                    try await cardStore.load()
+                } catch {
+                    print("加载卡片失败：\(error)")
+                }
             }
         }
     }
@@ -336,19 +356,19 @@ struct MainListView: View {
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
                         self.showingTranscription = false // 隐藏转写窗口
                     } 
-                    // 新增：检测"编辑我的水杯"指令
+                    // 检测"编辑我的水杯"指令
                     else if TextMatchingService.checkEditWaterBottleCommand(text: text) {
                         // 查找"我的水杯"卡片并打开编辑页面
                         self.findAndEditWaterBottleCard()
                         self.showingTranscription = false // 隐藏转写窗口
                     }
-                    // 新增：检测"寻务助手"指令
+                    // 检测"寻务助手"指令
                     else if TextMatchingService.checkNavigationAssistantCommand(text: text) {
                         // 如果是寻务助手指令，发送通知切换到寻务助手标签页
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToNavigationTab"), object: nil)
                         self.showingTranscription = false // 隐藏转写窗口
                     } 
-                    // 新增：检测"物品识别"指令
+                    // 检测"物品识别"指令
                     else if TextMatchingService.checkObjectDetectionCommand(text: text) {
                         // 如果是物品识别指令，发送通知切换到物品识别标签页
                         NotificationCenter.default.post(name: NSNotification.Name("SwitchToObjectDetectionTab"), object: nil)
@@ -368,7 +388,7 @@ struct MainListView: View {
         }
     }
     
-    // 新增：检查是否是寻找水杯的指令
+    // 检查是否是寻找水杯的指令
     private func checkWaterBottleCommand(text: String) -> Bool {
         // 归一化文本，去除空格和标点符号
         let normalizedText = TextMatchingService.normalizeText(text)
@@ -386,7 +406,7 @@ struct MainListView: View {
         return false
     }
     
-    // 新增：查找并编辑水杯卡片
+    // 查找并编辑水杯卡片
     private func findAndEditWaterBottleCard() {
         // 查找标题为"我的水杯"的卡片
         if let waterBottleCard = cardStore.cards.first(where: { $0.title == "我的水杯" }) {
@@ -396,7 +416,7 @@ struct MainListView: View {
             self.showingEditWaterBottleCard = true
         } else {
             // 未找到水杯卡片，显示提示
-            self.transcriptionText = "未找到";"我的水杯";"卡片"
+            self.transcriptionText = "未找到\"我的水杯\"卡片"
         }
     }
     
@@ -443,80 +463,143 @@ extension Color {
     }
 }
 
-// 更新卡片样式 - 物品卡片（网格样式）
+// 物品卡片（网格样式）
 struct CardGridItem: View {
     let card: MemoryCard
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             // 图片区域
-            if !card.images.isEmpty, let uiImage = UIImage(data: card.images[0].imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 140) // 稍微减小图片高度
-                    .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(height: 140) // 稍微减小占位图高度
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundColor(.gray)
-                    )
+            ZStack(alignment: .topTrailing) {
+                if !card.images.isEmpty, let uiImage = UIImage(data: card.images[0].imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 150)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(LinearGradient(
+                            gradient: Gradient(colors: [Color(hex: "#F0F4F8"), Color(hex: "#E0E6EA")]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(height: 150)
+                        .overlay(
+                            Image(systemName: "photo")
+                                .font(.system(size: 30))
+                                .foregroundColor(.gray.opacity(0.7))
+                        )
+                }
+                
+                // 右上角标签 - 如果有音频
+                if card.audioData != nil {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12, weight: .medium))
+                        .padding(6)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.9))
+                                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        )
+                        .foregroundColor(.blue)
+                        .padding(8)
+                }
             }
             
             // 标题和内容区域
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(card.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .lineLimit(2)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .padding(.top, 10)
                 
                 if !card.content.isEmpty {
                     Text(card.content)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
-                        .lineLimit(2) // 增加内容显示行数
+                        .lineLimit(2)
+                        .padding(.bottom, 2)
                 }
+                
+                // 时间戳
+                HStack {
+                    Image(systemName: "clock")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                    
+                    Text(formatDate(card.timestamp))
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                }
+                .padding(.top, 4)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 12)
         }
-        .frame(maxWidth: .infinity) // 确保卡片宽度一致
         .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.15), radius: 5, x: 0, y: 2)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+    }
+    
+    // 格式化日期
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM月dd日"
+        return formatter.string(from: date)
     }
 }
 
-// 新增：事件卡片（列表样式）
+// 事件卡片（列表样式）
 struct EventCardListItem: View {
     let card: MemoryCard
     
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             // 左侧图片
-            if !card.images.isEmpty, let uiImage = UIImage(data: card.images[0].imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        Image(systemName: "calendar")
-                            .foregroundColor(.gray)
-                    )
+            ZStack(alignment: .bottomTrailing) {
+                if !card.images.isEmpty, let uiImage = UIImage(data: card.images[0].imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 90, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color(hex: "#FFB347"), Color(hex: "#FFCC80")]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .opacity(0.7)
+                        .frame(width: 90, height: 90)
+                        .overlay(
+                            Image(systemName: "calendar")
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        )
+                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                }
+                
+                // 音频指示器
+                if card.audioData != nil {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.white, Color.blue)
+                        .background(Circle().fill(Color.white))
+                        .offset(x: -4, y: -4)
+                }
             }
             
             // 右侧内容
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(card.title)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
                     .lineLimit(1)
                 
                 if !card.content.isEmpty {
@@ -526,45 +609,74 @@ struct EventCardListItem: View {
                         .lineLimit(2)
                 }
                 
-                // 时间戳 - 加亮显示
-                HStack(spacing: 4) {
-                    Image(systemName: "clock.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color.orange)
+                // 底部信息栏
+                HStack(spacing: 12) {
+                    // 日期时间
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(hex: "#FF9500"))
+                        
+                        Text(formatDate(card.timestamp))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "#FF9500"))
+                    }
                     
-                    Text(formatDate(card.timestamp))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color.orange)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.orange.opacity(0.15))
-                        )
+                    // 提醒状态
+                    if card.reminderEnabled {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(hex: "#30B0C7"))
+                            
+                            Text(formatReminderFrequency(card.reminderFrequency))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(Color(hex: "#30B0C7"))
+                        }
+                    }
                 }
-                .padding(.top, 2)
+                .padding(.top, 4)
             }
             .padding(.vertical, 8)
             
             Spacer()
             
-            // 右侧箭头
+            // 右侧箭头指示器
             Image(systemName: "chevron.right")
-                .foregroundColor(.gray)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.gray.opacity(0.6))
                 .padding(.trailing, 8)
         }
         .padding(12)
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
+        )
         .frame(maxWidth: .infinity)
     }
     
-    // 格式化日期为更友好的显示
+    // 格式化日期
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月dd日 HH:mm"
+        formatter.dateFormat = "MM月dd日 HH:mm"
         return formatter.string(from: date)
+    }
+    
+    // 格式化提醒频率
+    private func formatReminderFrequency(_ frequency: ReminderFrequency) -> String {
+        switch frequency {
+        case .once:
+            return "单次提醒"
+        case .daily:
+            return "每日提醒"
+        case .weekly:
+            return "每周提醒"
+        case .monthly:
+            return "每月提醒"
+        case .none:
+            return ""
+        }
     }
 }
 
