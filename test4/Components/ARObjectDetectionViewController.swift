@@ -428,13 +428,59 @@ extension ARObjectDetectionViewController: YOLOObjectDetectorDelegate {
         print("objectDetector 回调，检测到 \(results.count) 个物体")
         labelManager.clearAllBoundingBoxes()
         guard let currentFrame = sceneView.session.currentFrame else { return }
-        let transform = currentFrame.displayTransform(for: .portrait, viewportSize: sceneView.bounds.size)
+        
+        // 获取当前界面方向
+        let interfaceOrientation: UIInterfaceOrientation
+        if #available(iOS 15.0, *) {
+            let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+            interfaceOrientation = windowScene?.interfaceOrientation ?? .portrait
+        } else {
+            interfaceOrientation = UIApplication.shared.windows.first?.windowScene?.interfaceOrientation ?? .portrait
+        }
+        
+        // 使用ARKit提供的displayTransform获取变换矩阵
+        let transform = currentFrame.displayTransform(for: interfaceOrientation, viewportSize: sceneView.bounds.size)
+        
+        // 调试信息
+        print("当前界面方向: \(interfaceOrientation.rawValue), 视图尺寸: \(sceneView.bounds.size)")
+        
         for object in results {
             guard let bbox = object.boundingBox else { continue }
-            let rect = bbox.applying(transform)
+            
+            // 应用变换，获取在屏幕上的坐标
+            var rect = bbox.applying(transform)
+            
+            // 调整边界框尺寸，确保足够大以包含整个物体
+            let expansionFactor: CGFloat = 0.15  // 扩大15%
+            let centerX = rect.midX
+            let centerY = rect.midY
+            let newWidth = rect.width * (1 + expansionFactor)
+            let newHeight = rect.height * (1 + expansionFactor)
+            
+            rect = CGRect(
+                x: centerX - newWidth/2,
+                y: centerY - newHeight/2,
+                width: newWidth,
+                height: newHeight
+            )
+            
+            // 打印原始边界框和变换后的边界框，帮助调试
+            printBoundingBoxInfo(originalBox: bbox, transformedBox: rect, objectID: object.identifier)
+            
+            // 获取标签文本，优先使用自定义名称
             let label = labelManager.getCustomName(for: object.identifier) ?? object.identifier
+            
+            // 添加边界框
             labelManager.addBoundingBox(for: object.identifier, at: rect, label: label, confidence: object.confidence, baseRect: sceneView.bounds)
         }
+    }
+    
+    // 辅助方法：打印边界框信息
+    private func printBoundingBoxInfo(originalBox: CGRect, transformedBox: CGRect, objectID: String) {
+        print("物体: \(objectID)")
+        print("  原始边界框: x=\(originalBox.origin.x), y=\(originalBox.origin.y), w=\(originalBox.width), h=\(originalBox.height)")
+        print("  变换后边界框: x=\(transformedBox.origin.x), y=\(transformedBox.origin.y), w=\(transformedBox.width), h=\(transformedBox.height)")
     }
     
     func objectDetector(_ detector: Any, didFailWithError error: Error) {
