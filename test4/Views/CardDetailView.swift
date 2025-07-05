@@ -115,6 +115,24 @@ struct CardDetailView: View {
                         .padding(.bottom, 18)
                 }
                 
+                // 音频播放区域
+                if updatedCard.audioData != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("录音")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(.bottom, 4)
+                        
+                        AudioPlayButton(audioData: updatedCard.audioData)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemGray6).opacity(0.5))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 12)
+                }
+                
                 // 位置信息显示
                 if let dest = destination, dest.latitude != 0 || dest.longitude != 0 {
                     VStack(alignment: .leading, spacing: 8) {
