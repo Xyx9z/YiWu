@@ -399,6 +399,7 @@
 				DEVELOPMENT_TEAM = 7PCRPRV387;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "忆物";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问相机来拍照";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风来进行录音";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -432,6 +433,7 @@
 				DEVELOPMENT_TEAM = 7PCRPRV387;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "忆物";
 				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问相机来拍照";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风来进行录音";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
