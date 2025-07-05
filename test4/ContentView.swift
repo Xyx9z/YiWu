@@ -109,6 +109,16 @@ struct ContentView: View {
             // 切换到寻物助手标签页
             selectedTab = 1
         }
+        
+        // 添加物品识别标签页的通知监听器
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SwitchToObjectDetectionTab"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            // 切换到物品识别标签页
+            selectedTab = 2
+        }
     }
     
     // 创建提醒对话框的绑定
